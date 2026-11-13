@@ -2,11 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftRight,
   ChevronDown,
+  Download,
   Equal,
+  GripVertical,
   ListPlus,
-  Menu,
   Moon,
+  MoreVertical,
   Pencil,
+  RefreshCw,
   SlidersHorizontal,
   Sun,
   TrendingUp,
@@ -80,7 +83,6 @@ export default function App() {
   const [customRatesUsd, setCustomRatesUsd] = useState<Record<string, number>>(
     () => initialSaved.customRatesUsd || {}
   );
-  // Default dark mode matching the CONVERSOR PLUS update
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (initialSaved.theme === 'light' || initialSaved.theme === 'dark') {
       return initialSaved.theme;
@@ -88,7 +90,7 @@ export default function App() {
     return 'dark';
   });
 
-  // Calculator state (default 548 matching update)
+  // Calculator state
   const [inputString, setInputString] = useState<string>('548');
   const [pendingOperator, setPendingOperator] = useState<CalcOperator | null>(null);
   const [previousValue, setPreviousValue] = useState<number | null>(null);
@@ -99,21 +101,31 @@ export default function App() {
   const isOnline = useOnlineStatus();
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null);
+  const [lastUpdatedTime, setLastUpdatedTime] = useState<string | null>(null);
+  const [rateFetchFailed, setRateFetchFailed] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
-  // Modals & Chart Pair
+  // Top Dropdown Menu & Modals
+  const [topMenuOpen, setTopMenuOpen] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showChartModal, setShowChartModal] = useState<boolean>(false);
   const [showCustomRateModal, setShowCustomRateModal] = useState<boolean>(false);
   const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
   const [chartTargetCode, setChartTargetCode] = useState<string>('BRL');
 
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState<number>(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState<boolean>(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullDistanceRef = useRef<number>(0);
+  const PULL_TRIGGER_THRESHOLD = 62;
+
   // Drag-reorder state
   const [draggingCode, setDraggingCode] = useState<string | null>(null);
   const [dragOverCode, setDragOverCode] = useState<string | null>(null);
   const suppressRowClickRef = useRef<boolean>(false);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
+  const topMenuRef = useRef<HTMLDivElement | null>(null);
 
   const showToast = useCallback((message: string) => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -156,6 +168,18 @@ export default function App() {
     }
   }, [activeCode, selectedCodes, chartTargetCode]);
 
+  // Close top dropdown on outside click
+  useEffect(() => {
+    if (!topMenuOpen) return;
+    const handleDocClick = (e: MouseEvent) => {
+      if (topMenuRef.current && !topMenuRef.current.contains(e.target as Node)) {
+        setTopMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handleDocClick);
+    return () => document.removeEventListener('click', handleDocClick);
+  }, [topMenuOpen]);
+
   const getEffectiveUsdRate = useCallback(
     (code: string) => customRatesUsd[code] ?? baseRatesUsd[code] ?? 1,
     [customRatesUsd, baseRatesUsd]
@@ -170,68 +194,138 @@ export default function App() {
   const fetchLiveRates = useCallback(
     async (manual = false) => {
       if (manual) setIsRefreshing(true);
-      try {
-        const [fiatRes, cryptoRes] = await Promise.all([
-          fetch('https://open.er-api.com/v6/latest/USD'),
-          fetch(
-            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,polygon-ecosystem-token,matic-network,tron,binancecoin&vs_currencies=usd'
-          ),
-        ]);
+      const nextRates: Record<string, number> = {};
+      let updatedAny = false;
 
-        const nextRates: Record<string, number> = {};
-
-        if (fiatRes.ok) {
-          const fiatData = await fiatRes.json();
-          if (fiatData?.rates) {
-            Object.keys(DEFAULT_RATES_USD).forEach((code) => {
-              if (typeof fiatData.rates[code] === 'number' && fiatData.rates[code] > 0) {
-                nextRates[code] = fiatData.rates[code];
-              }
-            });
+      // 1. Fiat: Open ER-API + AwesomeAPI (USD-BRL live bid)
+      const fiatPromise = (async () => {
+        try {
+          const res = await fetch(`https://open.er-api.com/v6/latest/USD?t=${Date.now()}`, {
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.rates) {
+              Object.keys(DEFAULT_RATES_USD).forEach((code) => {
+                if (typeof data.rates[code] === 'number' && data.rates[code] > 0) {
+                  nextRates[code] = data.rates[code];
+                }
+              });
+              updatedAny = true;
+            }
           }
+        } catch {
+          // ignore
         }
 
-        if (cryptoRes.ok) {
-          const cryptoData = await cryptoRes.json();
-          if (cryptoData.bitcoin?.usd) nextRates.BTC = 1 / cryptoData.bitcoin.usd;
-          if (cryptoData.ethereum?.usd) nextRates.ETH = 1 / cryptoData.ethereum.usd;
-          if (cryptoData.solana?.usd) nextRates.SOL = 1 / cryptoData.solana.usd;
-          const polPrice =
-            cryptoData['polygon-ecosystem-token']?.usd || cryptoData['matic-network']?.usd;
-          if (polPrice) nextRates.POL = 1 / polPrice;
-          if (cryptoData.tron?.usd) nextRates.TRX = 1 / cryptoData.tron.usd;
-          if (cryptoData.binancecoin?.usd) nextRates.BNB = 1 / cryptoData.binancecoin.usd;
+        try {
+          const brlRes = await fetch(
+            `https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,GBP-BRL?t=${Date.now()}`,
+            { cache: 'no-store' }
+          );
+          if (brlRes.ok) {
+            const brlData = await brlRes.json();
+            const usdBrl = parseFloat(brlData?.USDBRL?.bid);
+            if (usdBrl > 0) {
+              nextRates.BRL = usdBrl;
+              updatedAny = true;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      })();
+
+      // 2. Crypto: Fast Binance ticker API with CoinGecko fallback
+      const cryptoPromise = (async () => {
+        try {
+          const binanceSymbols = JSON.stringify([
+            'BTCUSDT',
+            'ETHUSDT',
+            'SOLUSDT',
+            'POLUSDT',
+            'TRXUSDT',
+            'BNBUSDT',
+          ]);
+          const bRes = await fetch(
+            `https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(
+              binanceSymbols
+            )}`,
+            { cache: 'no-store' }
+          );
+          if (bRes.ok) {
+            const list = await bRes.json();
+            if (Array.isArray(list)) {
+              list.forEach((item: { symbol?: string; price?: string }) => {
+                const p = parseFloat(item.price || '');
+                if (!(p > 0)) return;
+                if (item.symbol === 'BTCUSDT') nextRates.BTC = 1 / p;
+                else if (item.symbol === 'ETHUSDT') nextRates.ETH = 1 / p;
+                else if (item.symbol === 'SOLUSDT') nextRates.SOL = 1 / p;
+                else if (item.symbol === 'POLUSDT') nextRates.POL = 1 / p;
+                else if (item.symbol === 'TRXUSDT') nextRates.TRX = 1 / p;
+                else if (item.symbol === 'BNBUSDT') nextRates.BNB = 1 / p;
+              });
+              updatedAny = true;
+              return;
+            }
+          }
+        } catch {
+          // fall through to CoinGecko
         }
 
-        if (Object.keys(nextRates).length > 0) {
-          setBaseRatesUsd((prev) => ({ ...prev, ...nextRates }));
-          const now = new Date();
-          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          const dateStr = now
-            .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-            .replace(' de ', ' ')
-            .replace('.', '');
-          setLastUpdatedLabel(`Atualizado: ${timeStr}, ${dateStr}`);
-          if (manual) showToast('Cotações atualizadas!');
-        } else if (manual) {
-          showToast('Sem conexão. Usando taxas salvas.');
+        try {
+          const cgRes = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,polygon-ecosystem-token,matic-network,tron,binancecoin&vs_currencies=usd&t=${Date.now()}`,
+            { cache: 'no-store' }
+          );
+          if (cgRes.ok) {
+            const cryptoData = await cgRes.json();
+            if (cryptoData.bitcoin?.usd) nextRates.BTC = 1 / cryptoData.bitcoin.usd;
+            if (cryptoData.ethereum?.usd) nextRates.ETH = 1 / cryptoData.ethereum.usd;
+            if (cryptoData.solana?.usd) nextRates.SOL = 1 / cryptoData.solana.usd;
+            const polPrice =
+              cryptoData['polygon-ecosystem-token']?.usd || cryptoData['matic-network']?.usd;
+            if (polPrice) nextRates.POL = 1 / polPrice;
+            if (cryptoData.tron?.usd) nextRates.TRX = 1 / cryptoData.tron.usd;
+            if (cryptoData.binancecoin?.usd) nextRates.BNB = 1 / cryptoData.binancecoin.usd;
+            updatedAny = true;
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        if (manual) showToast('Sem conexão. Usando taxas salvas.');
-      } finally {
-        if (manual) {
-          setTimeout(() => setIsRefreshing(false), 300);
-        }
+      })();
+
+      await Promise.all([fiatPromise, cryptoPromise]);
+
+      if (updatedAny && Object.keys(nextRates).length > 0) {
+        setBaseRatesUsd((prev) => ({ ...prev, ...nextRates }));
+        const nowStr = new Date().toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+        setLastUpdatedTime(nowStr);
+        setRateFetchFailed(false);
+        if (manual) showToast('Cotações online atualizadas!');
+      } else {
+        setRateFetchFailed(true);
+        if (manual) showToast('Tentando reconectar às cotações online...');
+      }
+
+      if (manual) {
+        setTimeout(() => setIsRefreshing(false), 300);
       }
     },
     [showToast]
   );
 
+  // Auto-refresh every 5 seconds
   useEffect(() => {
     fetchLiveRates(false);
     const id = setInterval(() => {
       fetchLiveRates(false);
-    }, 30000);
+    }, 5000);
     return () => clearInterval(id);
   }, [fetchLiveRates]);
 
@@ -320,7 +414,7 @@ export default function App() {
     (code: string) => {
       if (suppressRowClickRef.current || draggingCode) return;
       if (code === activeCode) {
-        if (!keypadExpanded) setKeypadExpanded(true);
+        setResetOnNextDigit(true);
         return;
       }
 
@@ -328,19 +422,14 @@ export default function App() {
       const toUsdRate = getEffectiveUsdRate(code);
       const converted =
         fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
-      const info = CURRENCY_MAP[code] || { decimals: 2 };
 
       setActiveCode(code);
-      setInputString(
-        converted === 0
-          ? '0'
-          : Number(converted.toFixed(info.decimals)).toString().replace('.', ',')
-      );
+      setInputString(formatNumberToInput(converted));
       setPendingOperator(null);
       setPreviousValue(null);
       setResetOnNextDigit(true);
     },
-    [draggingCode, activeCode, keypadExpanded, getEffectiveUsdRate, activeNumericValue]
+    [draggingCode, activeCode, getEffectiveUsdRate, activeNumericValue]
   );
 
   const handleSwapTopTwo = useCallback(() => {
@@ -353,14 +442,9 @@ export default function App() {
     const toUsdRate = getEffectiveUsdRate(nextActive);
     const converted =
       fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
-    const info = CURRENCY_MAP[nextActive] || { decimals: 2 };
 
     setActiveCode(nextActive);
-    setInputString(
-      converted === 0
-        ? '0'
-        : Number(converted.toFixed(info.decimals)).toString().replace('.', ',')
-    );
+    setInputString(formatNumberToInput(converted));
     setPendingOperator(null);
     setPreviousValue(null);
     setResetOnNextDigit(true);
@@ -449,6 +533,9 @@ export default function App() {
     setDraggingCode(code);
     setDragOverCode(code);
     suppressRowClickRef.current = true;
+    pullStartYRef.current = null;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
     if (navigator.vibrate) {
       navigator.vibrate(25);
     }
@@ -491,12 +578,61 @@ export default function App() {
       setDraggingCode(null);
       setTimeout(() => {
         suppressRowClickRef.current = false;
-      }, 120);
+      }, 140);
     };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
     window.addEventListener('pointercancel', handleUp);
+  };
+
+  // Pull-to-refresh touch handlers on the list container
+  const handleListTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (draggingCode || isPullRefreshing) return;
+    const container = listContainerRef.current;
+    if (container && container.scrollTop <= 0 && e.touches.length === 1) {
+      pullStartYRef.current = e.touches[0].clientY;
+    } else {
+      pullStartYRef.current = null;
+    }
+  };
+
+  const handleListTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (pullStartYRef.current === null || draggingCode || isPullRefreshing) return;
+    const container = listContainerRef.current;
+    if (!container || container.scrollTop > 0) {
+      pullStartYRef.current = null;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+      return;
+    }
+    const deltaY = e.touches[0].clientY - pullStartYRef.current;
+    if (deltaY > 6) {
+      const clamped = Math.min(84, deltaY * 0.55);
+      pullDistanceRef.current = clamped;
+      setPullDistance(clamped);
+    }
+  };
+
+  const handleListTouchEnd = async () => {
+    if (pullStartYRef.current === null) return;
+    const pulled = pullDistanceRef.current;
+    pullStartYRef.current = null;
+
+    if (pulled >= PULL_TRIGGER_THRESHOLD && !isPullRefreshing) {
+      setIsPullRefreshing(true);
+      setPullDistance(44);
+      if (navigator.vibrate) navigator.vibrate(20);
+      await fetchLiveRates(true);
+      setTimeout(() => {
+        setIsPullRefreshing(false);
+        pullDistanceRef.current = 0;
+        setPullDistance(0);
+      }, 350);
+    } else {
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+    }
   };
 
   const activeUsdRate = getEffectiveUsdRate(activeCode);
@@ -509,12 +645,6 @@ export default function App() {
     '*': '×',
     '/': '÷',
   };
-
-  const statusText = !isOnline
-    ? 'Modo Offline · Taxas salvas no aparelho'
-    : isRefreshing
-    ? 'Atualizando cotações...'
-    : lastUpdatedLabel || 'Atualizado agora · Toque para atualizar';
 
   return (
     <div className="h-[100dvh] lg:min-h-screen lg:h-auto bg-slate-200 dark:bg-[#0d0d0d] text-slate-900 dark:text-[#f2f2f2] flex flex-col overflow-hidden lg:overflow-visible">
@@ -533,17 +663,17 @@ export default function App() {
         ))}
       </div>
 
-      {/* TOP BAR CLEAN & ROBUSTA */}
-      <header className="bg-slate-100 dark:bg-[#1e1e1e] text-slate-900 dark:text-white shrink-0 z-20 border-b border-slate-200 dark:border-[#282828]">
+      {/* TOP BAR CLEAN & ROBUSTA COM MENU NOS TRÊS PONTINHOS */}
+      <header className="bg-slate-100 dark:bg-[#1e1e1e] text-slate-900 dark:text-white shrink-0 z-30 border-b border-slate-200 dark:border-[#282828] relative">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <button
             type="button"
-            onClick={() => setShowInstallModal(true)}
-            aria-label="Menu e instalação do aplicativo"
-            title="Baixar Aplicativo"
+            onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            aria-label="Alternar tema claro/escuro"
+            title="Alternar tema claro/escuro"
             className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
           >
-            <Menu className="w-6 h-6" />
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
           <div className="flex items-center gap-2">
@@ -552,41 +682,113 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {!isInstalled && (
-              <button
-                type="button"
-                onClick={() => setShowInstallModal(true)}
-                className="px-3 py-1.5 min-h-[36px] rounded-xl bg-[#4f86c6] hover:bg-[#5c94d6] text-white text-xs font-bold transition cursor-pointer whitespace-nowrap"
-              >
-                Baixar
-              </button>
-            )}
+          <div className="flex items-center gap-0.5 relative" ref={topMenuRef}>
             <button
               type="button"
-              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-              aria-label="Alternar tema Claro/Escuro"
-              title="Alternar tema"
-              className="min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
+              onClick={() => setKeypadExpanded((prev) => !prev)}
+              aria-label="Recolher ou expandir teclado"
+              title="Recolher / Expandir teclado"
+              className="lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
             >
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              <ChevronDown
+                className={`w-5 h-5 transition-transform duration-200 ${
+                  keypadExpanded ? 'rotate-0' : 'rotate-180'
+                }`}
+              />
             </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTopMenuOpen((prev) => !prev);
+              }}
+              aria-label="Mais opções"
+              aria-expanded={topMenuOpen}
+              title="Mais opções"
+              className="min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+
+            {/* Menu Suspenso dos Três Pontinhos */}
+            {topMenuOpen && (
+              <div className="absolute right-0 top-12 w-56 rounded-2xl bg-white dark:bg-[#232323] border border-slate-200 dark:border-[#363636] shadow-2xl py-1.5 z-50 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTopMenuOpen(false);
+                    setShowAddModal(true);
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#2f2f2f] flex items-center gap-3 transition cursor-pointer"
+                >
+                  <ListPlus className="w-4 h-4 text-[#4f86c6]" />
+                  <span>Gerenciar moedas</span>
+                </button>
+                <div className="h-px bg-slate-200 dark:bg-[#333333] mx-3" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTopMenuOpen(false);
+                    setShowInstallModal(true);
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#2f2f2f] flex items-center gap-3 transition cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-emerald-500" />
+                  <span>Baixar aplicativo</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       {/* MAIN WORKSPACE */}
       <main className="flex-1 min-h-0 flex flex-col lg:max-w-6xl lg:w-full lg:mx-auto lg:px-6 lg:py-6 lg:grid lg:grid-cols-[minmax(0,1fr)_390px] xl:grid-cols-[minmax(0,1fr)_410px] lg:gap-6 lg:items-start">
-        {/* LEFT COLUMN: Status + Simultaneous List + Manage Button */}
+        {/* LEFT COLUMN: Status + Pull-to-Refresh + Simultaneous List */}
         <section className="flex-1 min-h-0 flex flex-col bg-white dark:bg-[#141414] lg:rounded-2xl lg:border lg:border-slate-200 dark:lg:border-[#282828] lg:shadow-sm lg:overflow-hidden">
           {/* Clickable Status Bar */}
           <button
             type="button"
             onClick={() => fetchLiveRates(true)}
-            className="w-full bg-slate-50 dark:bg-[#141414] text-slate-500 dark:text-[#9e9e9e] text-xs sm:text-[13px] font-medium py-2.5 px-4 text-center border-b border-slate-200/70 dark:border-[#222222] hover:text-[#4f86c6] transition cursor-pointer shrink-0"
+            className="w-full bg-slate-50 dark:bg-[#141414] text-slate-500 dark:text-[#9e9e9e] text-xs sm:text-[13px] font-medium py-2 px-4 text-center border-b border-slate-200/70 dark:border-[#222222] hover:text-[#4f86c6] transition cursor-pointer shrink-0"
           >
-            {statusText}
+            {!isOnline
+              ? 'Modo Offline · Taxas salvas no aparelho'
+              : isRefreshing
+              ? 'Atualizando cotações online...'
+              : rateFetchFailed
+              ? 'Reconectando servidor online · Toque para tentar'
+              : lastUpdatedTime
+              ? `ONLINE · Atualizado às ${lastUpdatedTime} (auto 5s)`
+              : 'Atualizado agora · Puxe para baixo para atualizar'}
           </button>
+
+          {/* Pull-to-refresh visual indicator */}
+          <div
+            className="overflow-hidden transition-[height,opacity] duration-150 bg-slate-100/90 dark:bg-[#19202a] flex items-center justify-center gap-2 text-xs font-bold text-[#4f86c6] shrink-0"
+            style={{
+              height: `${isPullRefreshing ? 44 : pullDistance}px`,
+              opacity: isPullRefreshing ? 1 : Math.min(1, pullDistance / 45),
+            }}
+          >
+            <RefreshCw
+              className={`w-4 h-4 transition-transform duration-150 ${
+                isPullRefreshing ? 'animate-spin' : ''
+              }`}
+              style={
+                !isPullRefreshing
+                  ? { transform: `rotate(${Math.round(pullDistance * 4)}deg)` }
+                  : undefined
+              }
+            />
+            <span>
+              {isPullRefreshing
+                ? 'Atualizando cotações ao vivo...'
+                : pullDistance >= PULL_TRIGGER_THRESHOLD
+                ? 'Solte para atualizar agora'
+                : 'Puxe para atualizar cotações'}
+            </span>
+          </div>
 
           {/* Pending Calculator Expression Banner */}
           {pendingOperator && previousValue !== null && (
@@ -600,9 +802,13 @@ export default function App() {
             </div>
           )}
 
-          {/* Currency Rows */}
+          {/* Currency Rows (more vertical space + drag handle + pull-to-refresh) */}
           <div
             ref={listContainerRef}
+            onTouchStart={handleListTouchStart}
+            onTouchMove={handleListTouchMove}
+            onTouchEnd={handleListTouchEnd}
+            onTouchCancel={handleListTouchEnd}
             className="flex-1 overflow-y-auto currency-scroll divide-y divide-slate-200 dark:divide-[#232323]"
           >
             {selectedCodes.map((code) => {
@@ -632,10 +838,15 @@ export default function App() {
                   onPointerDown={(e) => {
                     const target = e.target as HTMLElement;
                     if (target.closest('button')) return;
+                    if (target.closest('[data-drag-handle]')) {
+                      e.preventDefault();
+                      startRowDrag(code, e.clientY);
+                      return;
+                    }
                     const startY = e.clientY;
                     pressTimer = window.setTimeout(() => {
                       startRowDrag(code, startY);
-                    }, 240);
+                    }, 220);
                     const cancelLongPress = (moveEv: PointerEvent) => {
                       if (Math.abs(moveEv.clientY - startY) > 8 && pressTimer) {
                         clearTimeout(pressTimer);
@@ -655,16 +866,23 @@ export default function App() {
                     window.addEventListener('pointerup', clearLongPress);
                     window.addEventListener('pointercancel', clearLongPress);
                   }}
-                  className={`px-4 py-3.5 min-h-[64px] flex items-center justify-between gap-3 cursor-pointer select-none transition-colors duration-150 ${
+                  className={`pl-2 pr-4 py-3.5 min-h-[64px] flex items-center justify-between gap-2 cursor-pointer select-none transition-colors duration-150 ${
                     isDragging
-                      ? 'bg-sky-100 dark:bg-[#253242] scale-[1.015] shadow-lg relative z-20'
+                      ? 'bg-sky-100 dark:bg-[#253242] scale-[1.02] shadow-lg relative z-20'
                       : isActive
                       ? 'bg-sky-50/80 dark:bg-[#1f2936]'
                       : 'hover:bg-slate-50 dark:hover:bg-[#1a1a1a]'
-                  } ${isDragTarget ? 'border-t-2 border-t-[#4f86c6]' : ''}`}
+                  } ${isDragTarget ? 'border-t-[2.5px] border-t-[#4f86c6]' : ''}`}
                 >
-                  {/* Left: Flag/Crypto + Large Code + Chevron */}
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Left: Drag Handle + Flag/Crypto + Large Code + Chevron */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      data-drag-handle
+                      title="Segure e arraste para reordenar"
+                      className="touch-none p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:text-[#666666] dark:hover:text-slate-300 cursor-grab active:cursor-grabbing shrink-0"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
                     <CurrencyBadge info={info} size="md" />
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="text-xl sm:text-[22px] font-medium tracking-wide text-slate-900 dark:text-[#f2f2f2]">
@@ -714,31 +932,6 @@ export default function App() {
                 </div>
               );
             })}
-          </div>
-
-          {/* Manage Currencies & Collapse Button Row */}
-          <div className="px-4 py-2.5 bg-white dark:bg-[#141414] border-t border-slate-200/70 dark:border-[#222222] shrink-0 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="flex-1 py-2.5 px-4 min-h-[44px] rounded-xl bg-slate-100 dark:bg-[#232323] hover:bg-slate-200 dark:hover:bg-[#2c2c2c] border border-slate-200 dark:border-[#303030] text-slate-800 dark:text-[#ececec] font-medium text-base flex items-center justify-center gap-2.5 transition shadow-xs cursor-pointer"
-            >
-              <ListPlus className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-              <span>Gerenciar moedas</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setKeypadExpanded((prev) => !prev)}
-              aria-label="Recolher ou expandir teclado"
-              title="Recolher / Expandir teclado"
-              className="lg:hidden py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-100 dark:bg-[#232323] hover:bg-slate-200 dark:hover:bg-[#2c2c2c] border border-slate-200 dark:border-[#303030] text-slate-700 dark:text-slate-300 transition cursor-pointer"
-            >
-              <ChevronDown
-                className={`w-5 h-5 transition-transform duration-200 ${
-                  keypadExpanded ? 'rotate-0' : 'rotate-180'
-                }`}
-              />
-            </button>
           </div>
         </section>
 
