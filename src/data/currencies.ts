@@ -9,8 +9,8 @@ export interface CurrencyInfo {
 }
 
 export const ALL_CURRENCIES: CurrencyInfo[] = [
-  { code: 'USD', name: 'Dólar Americano', symbol: '$', country: 'us', decimals: 2 },
   { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$', country: 'br', decimals: 2 },
+  { code: 'USD', name: 'Dólar Americano', symbol: '$', country: 'us', decimals: 2 },
   { code: 'EUR', name: 'Euro', symbol: '€', country: 'eu', decimals: 2 },
   { code: 'GBP', name: 'Libra Esterlina', symbol: '£', country: 'gb', decimals: 2 },
   { code: 'CAD', name: 'Dólar Canadense', symbol: 'C$', country: 'ca', decimals: 2 },
@@ -35,11 +35,11 @@ export const CURRENCY_MAP: Record<string, CurrencyInfo> = Object.fromEntries(
   ALL_CURRENCIES.map((c) => [c.code, c])
 );
 
-export const DEFAULT_SELECTED_CODES = ['USD', 'BRL', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'];
+export const DEFAULT_SELECTED_CODES = ['BRL', 'USD', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'];
 
 export const DEFAULT_RATES_USD: Record<string, number> = {
   USD: 1,
-  BRL: 5.75,
+  BRL: 5.64,
   EUR: 0.92,
   GBP: 0.79,
   CAD: 1.39,

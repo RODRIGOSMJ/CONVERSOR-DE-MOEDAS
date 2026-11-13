@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, Delete } from 'lucide-react';
+import { Delete, RefreshCw } from 'lucide-react';
 
 export type CalcOperator = '+' | '-' | '*' | '/';
 
@@ -9,8 +9,8 @@ interface KeypadProps {
   onBackspace: () => void;
   onClear: () => void;
   onOperator: (op: CalcOperator) => void;
-  onEquals: () => void;
   onSwapTopTwo: () => void;
+  onToggleCollapse?: () => void;
   activeOperator: CalcOperator | null;
 }
 
@@ -20,117 +20,130 @@ export const Keypad: React.FC<KeypadProps> = ({
   onBackspace,
   onClear,
   onOperator,
-  onEquals,
   onSwapTopTwo,
+  onToggleCollapse,
   activeOperator,
 }) => {
+  const digitBtnClass =
+    'h-[52px] rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs transition-transform duration-100 active:scale-95 select-none cursor-pointer flex items-center justify-center';
+
   const opBtnClass = (op: CalcOperator) =>
-    `h-12 rounded-xl font-bold text-xl shadow-xs border transition-transform duration-100 active:scale-95 select-none flex items-center justify-center cursor-pointer ${
+    `rounded-lg font-bold text-xl flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer ${
       activeOperator === op
-        ? 'bg-sky-600 text-white border-sky-500'
-        : 'bg-[#dce4ec] dark:bg-slate-800/95 hover:bg-slate-300 dark:hover:bg-slate-700 text-sky-700 dark:text-sky-400 border-slate-300/70 dark:border-slate-700/70'
+        ? 'bg-[#e09f5a] text-[#141414]'
+        : 'hover:bg-slate-100 dark:hover:bg-[#383838] text-[#e09f5a]'
     }`;
 
-  const digitBtnClass =
-    'h-12 rounded-xl bg-white dark:bg-[#1f2636] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-semibold text-xl shadow-xs border border-slate-200/90 dark:border-slate-800 transition-transform duration-100 active:scale-95 select-none cursor-pointer';
-
   return (
-    <div className="p-2.5 grid grid-cols-4 gap-1.5 font-mono-tabular bg-[#e8edf2] dark:bg-[#161b26]">
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label="Limpar valor"
-        className="h-12 rounded-xl bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 font-sans font-extrabold text-lg shadow-xs border border-slate-200/90 dark:border-slate-700/70 transition-transform duration-100 active:scale-95 select-none cursor-pointer"
-      >
-        C
-      </button>
-      <button
-        type="button"
-        onClick={() => onOperator('/')}
-        aria-label="Dividir"
-        className={opBtnClass('/')}
-      >
-        ÷
-      </button>
-      <button
-        type="button"
-        onClick={() => onOperator('*')}
-        aria-label="Multiplicar"
-        className={opBtnClass('*')}
-      >
-        ×
-      </button>
-      <button
-        type="button"
-        onClick={onBackspace}
-        aria-label="Apagar último dígito"
-        className="h-12 rounded-xl bg-[#dce4ec] dark:bg-slate-800/95 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-lg shadow-xs border border-slate-300/70 dark:border-slate-700/70 flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer"
-      >
-        <Delete className="w-5 h-5" />
-      </button>
-
-      {(['7', '8', '9'] as const).map((d) => (
-        <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
-          {d}
+    <div className="bg-slate-100 dark:bg-[#1d1d1d] rounded-t-2xl lg:rounded-none border-t border-slate-200 dark:border-[#2a2a2a] lg:border-t-0">
+      {/* Drawer Handle (mobile) */}
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-label="Recolher ou expandir teclado"
+          className="lg:hidden w-full py-2 flex justify-center cursor-pointer"
+        >
+          <span className="w-8 h-1 rounded-full bg-slate-300 dark:bg-[#4a4a4a]" />
         </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => onOperator('-')}
-        aria-label="Subtrair"
-        className={opBtnClass('-')}
-      >
-        −
-      </button>
+      )}
 
-      {(['4', '5', '6'] as const).map((d) => (
-        <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
-          {d}
+      <div className="px-2.5 pb-2.5 pt-2.5 lg:pt-2.5 grid grid-cols-4 gap-2 font-mono-tabular">
+        {/* Linha 1: C, 7, 8, 9 */}
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Limpar valor"
+          className="h-[52px] rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-[#d9534f] font-medium text-2xl shadow-xs transition-transform duration-100 active:scale-95 select-none cursor-pointer flex items-center justify-center"
+        >
+          C
         </button>
-      ))}
-      <button
-        type="button"
-        onClick={() => onOperator('+')}
-        aria-label="Somar"
-        className={opBtnClass('+')}
-      >
-        +
-      </button>
+        {(['7', '8', '9'] as const).map((d) => (
+          <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
+            {d}
+          </button>
+        ))}
 
-      {(['1', '2', '3'] as const).map((d) => (
-        <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
-          {d}
+        {/* Linha 2: Inverter, 4, 5, 6 */}
+        <button
+          type="button"
+          onClick={onSwapTopTwo}
+          title="Inverter moedas principais"
+          aria-label="Inverter moedas principais"
+          className="h-[52px] rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-[#4f86c6] font-bold text-xl shadow-xs flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer"
+        >
+          <RefreshCw className="w-5 h-5" />
         </button>
-      ))}
-      <button
-        type="button"
-        onClick={onEquals}
-        aria-label="Calcular resultado"
-        className="row-span-2 rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 text-white font-bold text-2xl shadow-md shadow-orange-500/20 flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer"
-      >
-        =
-      </button>
+        {(['4', '5', '6'] as const).map((d) => (
+          <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
+            {d}
+          </button>
+        ))}
 
-      <button
-        type="button"
-        onClick={onSwapTopTwo}
-        title="Inverter as duas primeiras moedas"
-        aria-label="Inverter as duas primeiras moedas"
-        className="h-12 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-sky-600 dark:text-sky-400 font-bold text-lg shadow-xs border border-slate-200/90 dark:border-slate-700/70 flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer"
-      >
-        <ArrowUpDown className="w-5 h-5" />
-      </button>
-      <button type="button" onClick={() => onDigit('0')} className={digitBtnClass}>
-        0
-      </button>
-      <button
-        type="button"
-        onClick={onDecimal}
-        aria-label="Vírgula decimal"
-        className={digitBtnClass}
-      >
-        ,
-      </button>
+        {/* Linha 3 & 4 Esquerda: Bloco 2x2 de Operações (+ − × ÷) */}
+        <div className="row-span-2 grid grid-cols-2 gap-1 rounded-xl bg-white dark:bg-[#2a2a2a] p-1.5 shadow-xs">
+          <button
+            type="button"
+            onClick={() => onOperator('+')}
+            aria-label="Somar"
+            className={opBtnClass('+')}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => onOperator('-')}
+            aria-label="Subtrair"
+            className={opBtnClass('-')}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => onOperator('*')}
+            aria-label="Multiplicar"
+            className={opBtnClass('*')}
+          >
+            ×
+          </button>
+          <button
+            type="button"
+            onClick={() => onOperator('/')}
+            aria-label="Dividir"
+            className={opBtnClass('/')}
+          >
+            ÷
+          </button>
+        </div>
+
+        {/* Linha 3 Direita: 1, 2, 3 */}
+        {(['1', '2', '3'] as const).map((d) => (
+          <button key={d} type="button" onClick={() => onDigit(d)} className={digitBtnClass}>
+            {d}
+          </button>
+        ))}
+
+        {/* Linha 4 Direita: 0, Vírgula, Apagar */}
+        <button type="button" onClick={() => onDigit('0')} className={digitBtnClass}>
+          0
+        </button>
+        <button
+          type="button"
+          onClick={onDecimal}
+          aria-label="Vírgula decimal"
+          className={digitBtnClass}
+        >
+          ,
+        </button>
+        <button
+          type="button"
+          onClick={onBackspace}
+          aria-label="Apagar último dígito"
+          className="h-[52px] rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-800 dark:text-[#f2f2f2] font-bold text-xl shadow-xs flex items-center justify-center transition-transform duration-100 active:scale-95 select-none cursor-pointer"
+        >
+          <Delete className="w-6 h-6" />
+        </button>
+      </div>
     </div>
   );
 };

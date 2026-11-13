@@ -226,7 +226,7 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
     <div className="space-y-3">
       {/* Period Selector + Source */}
       <div className="flex items-center justify-between gap-2">
-        <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold flex-1">
+        <div className="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-[#141414] p-1 rounded-xl text-xs font-bold flex-1">
           {PERIODS.map((p) => (
             <button
               key={p.days}
@@ -234,7 +234,7 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
               onClick={() => setDays(p.days)}
               className={`py-1.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap ${
                 days === p.days
-                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs'
+                  ? 'bg-white dark:bg-[#2a2a2a] text-[#4f86c6] shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
@@ -268,7 +268,7 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
       </div>
 
       {/* Interactive SVG Area Chart */}
-      <div className="relative h-40 w-full rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+      <div className="relative h-44 w-full rounded-xl bg-slate-50 dark:bg-[#141414] border border-slate-200/80 dark:border-[#2a2a2a] overflow-hidden">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           preserveAspectRatio="none"
@@ -290,8 +290,8 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
         >
           <defs>
             <linearGradient id="rateAreaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.01" />
+              <stop offset="0%" stopColor="#4f86c6" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#4f86c6" stopOpacity="0.01" />
             </linearGradient>
           </defs>
           {areaPath && <path d={areaPath} fill="url(#rateAreaFill)" />}
@@ -299,8 +299,8 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
             <path
               d={linePath}
               fill="none"
-              stroke="#0284c7"
-              strokeWidth="2.4"
+              stroke="#4f86c6"
+              strokeWidth="2.5"
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
@@ -313,8 +313,8 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
                 y1={0}
                 x2={activePoint.x}
                 y2={height}
-                stroke="#0284c7"
-                strokeOpacity="0.35"
+                stroke="#4f86c6"
+                strokeOpacity="0.4"
                 strokeDasharray="3 3"
                 vectorEffect="non-scaling-stroke"
               />
@@ -322,7 +322,7 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
                 cx={activePoint.x}
                 cy={activePoint.y}
                 r="4.5"
-                fill="#0284c7"
+                fill="#4f86c6"
                 stroke="#ffffff"
                 strokeWidth="2"
               />
@@ -333,13 +333,13 @@ export const RateHistoryChart: React.FC<RateHistoryChartProps> = ({
 
       {/* Min / Max Summary */}
       <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
-        <div className="px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-[#141414] border border-slate-200/70 dark:border-[#2a2a2a] flex items-center justify-between">
           <span className="text-slate-500 dark:text-slate-400">Mínima</span>
           <span className="font-mono-tabular font-semibold text-slate-900 dark:text-slate-100">
             {formatUnitRate(stats.min)}
           </span>
         </div>
-        <div className="px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-[#141414] border border-slate-200/70 dark:border-[#2a2a2a] flex items-center justify-between">
           <span className="text-slate-500 dark:text-slate-400">Máxima</span>
           <span className="font-mono-tabular font-semibold text-slate-900 dark:text-slate-100">
             {formatUnitRate(stats.max)}

@@ -1,15 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
-  Calculator,
   ChevronDown,
-  Download,
-  GripVertical,
-  LineChart,
+  Equal,
+  ListPlus,
+  Menu,
   Moon,
-  Percent,
-  Plus,
-  RefreshCw,
+  Pencil,
   SlidersHorizontal,
   Sun,
   TrendingUp,
@@ -30,12 +27,11 @@ import {
   formatDisplayNumber,
   formatNumberToInput,
   formatRawInputString,
-  formatUnitRate,
 } from './data/currencies';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { usePWAInstall } from './hooks/usePWAInstall';
 
-const STORAGE_KEY = 'conversor_plus_state_v4';
+const STORAGE_KEY = 'conversor_plus_state_v5';
 
 interface PersistedState {
   selectedCodes?: string[];
@@ -84,15 +80,16 @@ export default function App() {
   const [customRatesUsd, setCustomRatesUsd] = useState<Record<string, number>>(
     () => initialSaved.customRatesUsd || {}
   );
+  // Default dark mode matching the CONVERSOR PLUS update
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (initialSaved.theme === 'dark' || initialSaved.theme === 'light') {
+    if (initialSaved.theme === 'light' || initialSaved.theme === 'dark') {
       return initialSaved.theme;
     }
-    return 'light';
+    return 'dark';
   });
 
-  // Calculator state
-  const [inputString, setInputString] = useState<string>('100');
+  // Calculator state (default 548 matching update)
+  const [inputString, setInputString] = useState<string>('548');
   const [pendingOperator, setPendingOperator] = useState<CalcOperator | null>(null);
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [resetOnNextDigit, setResetOnNextDigit] = useState<boolean>(false);
@@ -102,7 +99,7 @@ export default function App() {
   const isOnline = useOnlineStatus();
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [lastUpdatedTime, setLastUpdatedTime] = useState<string | null>(null);
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   // Modals & Chart Pair
@@ -123,10 +120,9 @@ export default function App() {
     setToasts((prev) => [...prev, { id, message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2600);
+    }, 2500);
   }, []);
 
-  // Sync dark class on <html>
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'dark') {
@@ -136,7 +132,6 @@ export default function App() {
     }
   }, [theme]);
 
-  // Persist to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -154,7 +149,6 @@ export default function App() {
     }
   }, [selectedCodes, activeCode, baseRatesUsd, customRatesUsd, theme]);
 
-  // Ensure chartTargetCode stays valid and distinct from activeCode
   useEffect(() => {
     if (chartTargetCode === activeCode || !selectedCodes.includes(chartTargetCode)) {
       const next = selectedCodes.find((c) => c !== activeCode) || 'BRL';
@@ -211,28 +205,28 @@ export default function App() {
 
         if (Object.keys(nextRates).length > 0) {
           setBaseRatesUsd((prev) => ({ ...prev, ...nextRates }));
-          const nowStr = new Date().toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          });
-          setLastUpdatedTime(nowStr);
-          if (manual) showToast('Cotações atualizadas em tempo real!');
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          const dateStr = now
+            .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+            .replace(' de ', ' ')
+            .replace('.', '');
+          setLastUpdatedLabel(`Atualizado: ${timeStr}, ${dateStr}`);
+          if (manual) showToast('Cotações atualizadas!');
         } else if (manual) {
-          showToast('Sem conexão. Usando últimas taxas salvas.');
+          showToast('Sem conexão. Usando taxas salvas.');
         }
       } catch {
-        if (manual) showToast('Sem conexão. Usando últimas taxas salvas.');
+        if (manual) showToast('Sem conexão. Usando taxas salvas.');
       } finally {
         if (manual) {
-          setTimeout(() => setIsRefreshing(false), 350);
+          setTimeout(() => setIsRefreshing(false), 300);
         }
       }
     },
     [showToast]
   );
 
-  // Initial fetch & 30s live polling
   useEffect(() => {
     fetchLiveRates(false);
     const id = setInterval(() => {
@@ -241,7 +235,6 @@ export default function App() {
     return () => clearInterval(id);
   }, [fetchLiveRates]);
 
-  // Math operations
   const computeOperation = (a: number, b: number, op: CalcOperator): number => {
     switch (op) {
       case '+':
@@ -323,16 +316,6 @@ export default function App() {
     setResetOnNextDigit(true);
   }, [pendingOperator, previousValue, activeNumericValue]);
 
-  const handlePercent = useCallback(() => {
-    let result = activeNumericValue / 100;
-    if (pendingOperator && previousValue !== null) {
-      result = (previousValue * activeNumericValue) / 100;
-    }
-    setInputString(formatNumberToInput(result));
-    setResetOnNextDigit(false);
-    showToast('Porcentagem aplicada');
-  }, [activeNumericValue, pendingOperator, previousValue, showToast]);
-
   const selectActiveCurrency = useCallback(
     (code: string) => {
       if (suppressRowClickRef.current || draggingCode) return;
@@ -343,7 +326,8 @@ export default function App() {
 
       const fromUsdRate = getEffectiveUsdRate(activeCode);
       const toUsdRate = getEffectiveUsdRate(code);
-      const converted = fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
+      const converted =
+        fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
       const info = CURRENCY_MAP[code] || { decimals: 2 };
 
       setActiveCode(code);
@@ -362,13 +346,13 @@ export default function App() {
   const handleSwapTopTwo = useCallback(() => {
     if (selectedCodes.length < 2) return;
     const [first, second, ...rest] = selectedCodes;
-    const nextOrder = [second, first, ...rest];
-    setSelectedCodes(nextOrder);
+    setSelectedCodes([second, first, ...rest]);
     const nextActive = activeCode === first ? second : first;
 
     const fromUsdRate = getEffectiveUsdRate(activeCode);
     const toUsdRate = getEffectiveUsdRate(nextActive);
-    const converted = fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
+    const converted =
+      fromUsdRate > 0 ? (activeNumericValue / fromUsdRate) * toUsdRate : activeNumericValue;
     const info = CURRENCY_MAP[nextActive] || { decimals: 2 };
 
     setActiveCode(nextActive);
@@ -382,7 +366,6 @@ export default function App() {
     setResetOnNextDigit(true);
   }, [selectedCodes, activeCode, getEffectiveUsdRate, activeNumericValue]);
 
-  // Physical keyboard support
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -408,8 +391,6 @@ export default function App() {
       } else if (e.key === 'Enter' || e.key === '=') {
         e.preventDefault();
         handleEquals();
-      } else if (e.key === '%') {
-        handlePercent();
       }
     };
 
@@ -426,10 +407,8 @@ export default function App() {
     handleClear,
     handleOperator,
     handleEquals,
-    handlePercent,
   ]);
 
-  // Toggle currency in modal
   const handleToggleCurrency = (code: string) => {
     if (selectedCodes.includes(code)) {
       if (selectedCodes.length <= 2) {
@@ -446,7 +425,6 @@ export default function App() {
     }
   };
 
-  // Custom rate actions
   const handleSaveCustomRate = (targetCode: string, unitValue: number) => {
     if (!Number.isFinite(unitValue) || unitValue <= 0) {
       showToast('Informe um valor válido maior que zero.');
@@ -467,13 +445,12 @@ export default function App() {
     showToast('Taxas oficiais restauradas!');
   };
 
-  // Drag & Drop pointer reordering (supports touch handle, mouse handle, and long-press anywhere)
   const startRowDrag = (code: string, clientY: number) => {
     setDraggingCode(code);
     setDragOverCode(code);
     suppressRowClickRef.current = true;
     if (navigator.vibrate) {
-      navigator.vibrate(20);
+      navigator.vibrate(25);
     }
 
     const handleMove = (ev: PointerEvent) => {
@@ -506,7 +483,7 @@ export default function App() {
             copy.splice(toIdx, 0, code);
             return copy;
           });
-          showToast(`${code} movido na lista!`);
+          showToast(`${code} movido!`);
         }
         return null;
       });
@@ -533,14 +510,14 @@ export default function App() {
     '/': '÷',
   };
 
-  const syncLabel = !isOnline
-    ? 'Modo Offline · Taxas salvas'
-    : lastUpdatedTime
-    ? `Ao vivo · ${lastUpdatedTime}`
-    : 'Taxas ao vivo · Offline pronto';
+  const statusText = !isOnline
+    ? 'Modo Offline · Taxas salvas no aparelho'
+    : isRefreshing
+    ? 'Atualizando cotações...'
+    : lastUpdatedLabel || 'Atualizado agora · Toque para atualizar';
 
   return (
-    <div className="h-[100dvh] lg:min-h-screen lg:h-auto bg-slate-100 dark:bg-[#0d1118] text-slate-900 dark:text-slate-100 flex flex-col overflow-hidden lg:overflow-visible">
+    <div className="h-[100dvh] lg:min-h-screen lg:h-auto bg-slate-200 dark:bg-[#0d0d0d] text-slate-900 dark:text-[#f2f2f2] flex flex-col overflow-hidden lg:overflow-visible">
       {/* Toast Notifications */}
       <div
         aria-live="polite"
@@ -549,138 +526,75 @@ export default function App() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="bg-slate-900/95 dark:bg-slate-800 text-white text-xs font-medium px-3.5 py-2.5 rounded-xl shadow-lg border border-slate-700 text-center"
+            className="bg-[#252525] text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-[#383838] text-center"
           >
             {t.message}
           </div>
         ))}
       </div>
 
-      {/* TOP BAR */}
-      <header className="bg-[#2b6cb0] dark:bg-[#1a2232] text-white shrink-0 shadow-sm z-20">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
-          {/* Brand */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 p-1 flex flex-col justify-between shadow-inner shrink-0">
-              <div className="bg-sky-400 text-[7px] font-mono-tabular font-extrabold text-slate-900 text-right px-0.5 rounded-[2px] leading-tight">
-                100
-              </div>
-              <div className="grid grid-cols-3 gap-[1.5px] h-4">
-                <div className="bg-slate-300 rounded-[1px] text-[6px] text-slate-700 flex items-center justify-center font-bold">
-                  $
-                </div>
-                <div className="bg-slate-300 rounded-[1px] text-[6px] text-slate-700 flex items-center justify-center font-bold">
-                  €
-                </div>
-                <div className="row-span-2 bg-orange-500 rounded-[1px] text-[7px] text-white flex items-center justify-center font-bold">
-                  =
-                </div>
-                <div className="bg-slate-300 rounded-[1px] text-[6px] text-slate-700 flex items-center justify-center font-bold">
-                  £
-                </div>
-                <div className="bg-slate-300 rounded-[1px] text-[6px] text-slate-700 flex items-center justify-center font-bold">
-                  ¥
-                </div>
-              </div>
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight truncate">
-                Conversor de Moedas Plus
-              </h1>
-              <p className="text-[11px] text-sky-100/90 dark:text-slate-400 truncate">
-                {syncLabel}
-              </p>
-            </div>
+      {/* TOP BAR CLEAN & ROBUSTA */}
+      <header className="bg-slate-100 dark:bg-[#1e1e1e] text-slate-900 dark:text-white shrink-0 z-20 border-b border-slate-200 dark:border-[#282828]">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => setShowInstallModal(true)}
+            aria-label="Menu e instalação do aplicativo"
+            title="Baixar Aplicativo"
+            className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-base sm:text-lg tracking-wide whitespace-nowrap">
+              CONVERSOR <span className="font-normal">PLUS</span>
+            </span>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5">
             {!isInstalled && (
               <button
                 type="button"
                 onClick={() => setShowInstallModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold shadow-xs transition cursor-pointer whitespace-nowrap"
-                title="Instalar aplicativo no celular ou desktop"
+                className="px-3 py-1.5 min-h-[36px] rounded-xl bg-[#4f86c6] hover:bg-[#5c94d6] text-white text-xs font-bold transition cursor-pointer whitespace-nowrap"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline sm:inline">Baixar App</span>
+                Baixar
               </button>
             )}
             <button
               type="button"
-              onClick={() => fetchLiveRates(true)}
-              aria-label="Atualizar cotações"
-              title="Atualizar cotações"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/15 transition cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              aria-label="Gerenciar moedas"
-              title="Adicionar ou remover moedas"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/15 transition cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
+              onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
               aria-label="Alternar tema Claro/Escuro"
-              title="Alternar tema Claro/Escuro"
-              className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl hover:bg-white/15 transition cursor-pointer"
+              title="Alternar tema"
+              className="min-w-[44px] min-h-[44px] -mr-2 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200 cursor-pointer"
             >
-              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
           </div>
         </div>
       </header>
 
-      {/* MAIN WORKSPACE: Mobile single-column full-height | Desktop 2-column grid */}
+      {/* MAIN WORKSPACE */}
       <main className="flex-1 min-h-0 flex flex-col lg:max-w-6xl lg:w-full lg:mx-auto lg:px-6 lg:py-6 lg:grid lg:grid-cols-[minmax(0,1fr)_390px] xl:grid-cols-[minmax(0,1fr)_410px] lg:gap-6 lg:items-start">
-        {/* LEFT COLUMN: Simultaneous Currency List */}
-        <section className="flex-1 min-h-0 flex flex-col bg-white dark:bg-[#12161f] lg:rounded-2xl lg:border lg:border-slate-200 dark:lg:border-slate-800 lg:shadow-sm lg:overflow-hidden">
-          {/* Desktop Section Header */}
-          <div className="hidden lg:flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-[#161b26]">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
-                Conversão Simultânea
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Toque para definir a moeda base · Arraste para reordenar
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowCustomRateModal(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Minha Taxa</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#2b6cb0] hover:bg-[#235a96] transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Moedas</span>
-              </button>
-            </div>
-          </div>
+        {/* LEFT COLUMN: Status + Simultaneous List + Manage Button */}
+        <section className="flex-1 min-h-0 flex flex-col bg-white dark:bg-[#141414] lg:rounded-2xl lg:border lg:border-slate-200 dark:lg:border-[#282828] lg:shadow-sm lg:overflow-hidden">
+          {/* Clickable Status Bar */}
+          <button
+            type="button"
+            onClick={() => fetchLiveRates(true)}
+            className="w-full bg-slate-50 dark:bg-[#141414] text-slate-500 dark:text-[#9e9e9e] text-xs sm:text-[13px] font-medium py-2.5 px-4 text-center border-b border-slate-200/70 dark:border-[#222222] hover:text-[#4f86c6] transition cursor-pointer shrink-0"
+          >
+            {statusText}
+          </button>
 
-          {/* Pending Calculator Expression Banner (Mobile + Desktop) */}
+          {/* Pending Calculator Expression Banner */}
           {pendingOperator && previousValue !== null && (
-            <div className="bg-sky-50 dark:bg-slate-900/90 border-b border-sky-200 dark:border-slate-800 px-4 py-2 flex items-center justify-between text-xs shrink-0">
-              <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                <Calculator className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                <span>
-                  Conta em <strong className="text-slate-900 dark:text-slate-100">{activeCode}</strong>
-                </span>
+            <div className="bg-sky-50 dark:bg-[#1d2733] border-b border-sky-200 dark:border-[#2b3b4e] px-4 py-2 flex items-center justify-between text-sm shrink-0">
+              <span className="text-slate-600 dark:text-slate-300 font-medium">
+                Conta (<strong className="text-slate-900 dark:text-white">{activeCode}</strong>):
               </span>
-              <span className="font-mono-tabular font-bold text-sky-700 dark:text-sky-400">
+              <span className="font-mono-tabular font-bold text-base text-sky-600 dark:text-[#6aa3e8]">
                 {formatDisplayNumber(previousValue, 4)} {opLabels[pendingOperator]} {inputString}
               </span>
             </div>
@@ -689,7 +603,7 @@ export default function App() {
           {/* Currency Rows */}
           <div
             ref={listContainerRef}
-            className="flex-1 overflow-y-auto currency-scroll divide-y divide-slate-200/80 dark:divide-slate-800/80"
+            className="flex-1 overflow-y-auto currency-scroll divide-y divide-slate-200 dark:divide-[#232323]"
           >
             {selectedCodes.map((code) => {
               const info = CURRENCY_MAP[code] || {
@@ -700,7 +614,6 @@ export default function App() {
               };
               const isActive = code === activeCode;
               const targetUsdRate = getEffectiveUsdRate(code);
-              const unitRate = activeUsdRate > 0 ? targetUsdRate / activeUsdRate : 1;
               const isCustom = Boolean(customRatesUsd[code]);
               const isDragging = draggingCode === code;
               const isDragTarget = dragOverCode === code && draggingCode && draggingCode !== code;
@@ -719,99 +632,64 @@ export default function App() {
                   onPointerDown={(e) => {
                     const target = e.target as HTMLElement;
                     if (target.closest('button')) return;
-                    if (target.closest('[data-drag-handle]')) {
-                      e.preventDefault();
-                      startRowDrag(code, e.clientY);
-                    } else {
-                      const startY = e.clientY;
-                      pressTimer = window.setTimeout(() => {
-                        startRowDrag(code, startY);
-                      }, 240);
-                      const cancelLongPress = (moveEv: PointerEvent) => {
-                        if (Math.abs(moveEv.clientY - startY) > 8 && pressTimer) {
-                          clearTimeout(pressTimer);
-                          pressTimer = null;
-                        }
-                      };
-                      const clearLongPress = () => {
-                        if (pressTimer) {
-                          clearTimeout(pressTimer);
-                          pressTimer = null;
-                        }
-                        window.removeEventListener('pointermove', cancelLongPress);
-                        window.removeEventListener('pointerup', clearLongPress);
-                        window.removeEventListener('pointercancel', clearLongPress);
-                      };
-                      window.addEventListener('pointermove', cancelLongPress);
-                      window.addEventListener('pointerup', clearLongPress);
-                      window.addEventListener('pointercancel', clearLongPress);
-                    }
+                    const startY = e.clientY;
+                    pressTimer = window.setTimeout(() => {
+                      startRowDrag(code, startY);
+                    }, 240);
+                    const cancelLongPress = (moveEv: PointerEvent) => {
+                      if (Math.abs(moveEv.clientY - startY) > 8 && pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                      }
+                    };
+                    const clearLongPress = () => {
+                      if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                      }
+                      window.removeEventListener('pointermove', cancelLongPress);
+                      window.removeEventListener('pointerup', clearLongPress);
+                      window.removeEventListener('pointercancel', clearLongPress);
+                    };
+                    window.addEventListener('pointermove', cancelLongPress);
+                    window.addEventListener('pointerup', clearLongPress);
+                    window.addEventListener('pointercancel', clearLongPress);
                   }}
-                  className={`px-3 sm:px-4 py-3 min-h-[64px] flex items-center justify-between gap-2.5 cursor-pointer select-none transition-colors duration-150 ${
+                  className={`px-4 py-3.5 min-h-[64px] flex items-center justify-between gap-3 cursor-pointer select-none transition-colors duration-150 ${
                     isDragging
-                      ? 'bg-sky-100/90 dark:bg-sky-900/60 scale-[1.01] shadow-lg relative z-20'
+                      ? 'bg-sky-100 dark:bg-[#253242] scale-[1.015] shadow-lg relative z-20'
                       : isActive
-                      ? 'bg-sky-50/90 dark:bg-sky-950/35 ring-1 ring-inset ring-sky-500/35'
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-900/50'
-                  } ${isDragTarget ? 'border-t-2 border-t-sky-600' : ''}`}
+                      ? 'bg-sky-50/80 dark:bg-[#1f2936]'
+                      : 'hover:bg-slate-50 dark:hover:bg-[#1a1a1a]'
+                  } ${isDragTarget ? 'border-t-2 border-t-[#4f86c6]' : ''}`}
                 >
-                  {/* Left: Drag Handle + Flag/Crypto + Code + Name */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      data-drag-handle
-                      title="Segure e arraste para reordenar"
-                      className="touch-none p-1.5 -ml-1 text-slate-300 dark:text-slate-600 hover:text-sky-600 dark:hover:text-sky-400 cursor-grab active:cursor-grabbing shrink-0"
-                    >
-                      <GripVertical className="w-4 h-4" />
-                    </div>
+                  {/* Left: Flag/Crypto + Large Code + Chevron */}
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <CurrencyBadge info={info} size="md" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`font-bold text-sm sm:text-[15px] ${
-                            isActive
-                              ? 'text-sky-700 dark:text-sky-300'
-                              : 'text-slate-900 dark:text-slate-100'
-                          }`}
-                        >
-                          {info.code}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xl sm:text-[22px] font-medium tracking-wide text-slate-900 dark:text-[#f2f2f2]">
+                        {info.code}
+                      </span>
+                      <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-300 shrink-0" />
+                      {isCustom && (
+                        <span className="text-[11px] font-semibold text-amber-500 ml-1">
+                          · Manual
                         </span>
-                        <span className="text-[11px] font-mono-tabular text-slate-400 dark:text-slate-500">
-                          · {info.symbol}
-                        </span>
-                        {isCustom && (
-                          <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                            · Taxa manual
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                        {info.name}
-                      </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right: Value + Unit Rate + Chart Trigger */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <div className="text-right">
-                      <div
-                        className={`font-mono-tabular text-lg sm:text-xl font-bold tracking-tight flex items-baseline justify-end gap-1 ${
-                          isActive
-                            ? 'text-sky-700 dark:text-sky-300'
-                            : 'text-slate-900 dark:text-white'
-                        }`}
-                      >
-                        <span className="text-xs sm:text-sm font-semibold opacity-65">
-                          {info.symbol}
-                        </span>
-                        <span>{displayValueStr}</span>
-                      </div>
-                      <div className="text-[11px] font-mono-tabular text-slate-500 dark:text-slate-400">
-                        {isActive
-                          ? 'Moeda base ativa'
-                          : `1 ${activeCode} = ${formatUnitRate(unitRate)} ${code}`}
-                      </div>
-                    </div>
+                  {/* Right: Large Tabular Amount + Chart Trigger */}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {isActive ? (
+                      <span className="px-2.5 py-0.5 rounded-[4px] bg-[#4b6a8e] text-white font-mono-tabular text-2xl sm:text-[26px] font-normal tracking-tight leading-snug">
+                        {displayValueStr}
+                      </span>
+                    ) : (
+                      <span className="font-mono-tabular text-2xl sm:text-[26px] font-normal tracking-tight text-slate-900 dark:text-[#ececec]">
+                        {displayValueStr}
+                      </span>
+                    )}
 
                     <button
                       type="button"
@@ -828,66 +706,70 @@ export default function App() {
                       }}
                       aria-label={`Ver gráfico ${activeCode}/${code}`}
                       title={`Ver gráfico ${activeCode}/${code}`}
-                      className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-400 hover:text-[#4f86c6] transition cursor-pointer"
                     >
-                      <LineChart className="w-4 h-4" />
+                      <TrendingUp className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Manage Currencies & Collapse Button Row */}
+          <div className="px-4 py-2.5 bg-white dark:bg-[#141414] border-t border-slate-200/70 dark:border-[#222222] shrink-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="flex-1 py-2.5 px-4 min-h-[44px] rounded-xl bg-slate-100 dark:bg-[#232323] hover:bg-slate-200 dark:hover:bg-[#2c2c2c] border border-slate-200 dark:border-[#303030] text-slate-800 dark:text-[#ececec] font-medium text-base flex items-center justify-center gap-2.5 transition shadow-xs cursor-pointer"
+            >
+              <ListPlus className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+              <span>Gerenciar moedas</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setKeypadExpanded((prev) => !prev)}
+              aria-label="Recolher ou expandir teclado"
+              title="Recolher / Expandir teclado"
+              className="lg:hidden py-2.5 px-3.5 min-h-[44px] rounded-xl bg-slate-100 dark:bg-[#232323] hover:bg-slate-200 dark:hover:bg-[#2c2c2c] border border-slate-200 dark:border-[#303030] text-slate-700 dark:text-slate-300 transition cursor-pointer"
+            >
+              <ChevronDown
+                className={`w-5 h-5 transition-transform duration-200 ${
+                  keypadExpanded ? 'rotate-0' : 'rotate-180'
+                }`}
+              />
+            </button>
+          </div>
         </section>
 
         {/* RIGHT COLUMN (DESKTOP) / COLLAPSIBLE DRAWER (MOBILE) */}
         <aside className="shrink-0 lg:space-y-4">
-          {/* Mobile Collapse Bar */}
-          <div className="lg:hidden bg-slate-100 dark:bg-[#181e2c] border-t border-slate-200 dark:border-slate-800 px-3 py-1 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setKeypadExpanded((prev) => !prev)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-400 hover:opacity-80 transition py-1.5 px-2 rounded-lg cursor-pointer"
-            >
-              <ChevronDown
-                className={`w-4 h-4 transition-transform duration-200 ${
-                  keypadExpanded ? 'rotate-0' : 'rotate-180'
-                }`}
-              />
-              <span>
-                {keypadExpanded
-                  ? 'Recolher teclado (ver mais moedas)'
-                  : 'Abrir teclado numérico'}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600 flex items-center gap-1 px-2 py-1.5 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Moeda</span>
-            </button>
-          </div>
-
-          {/* Calculator Keypad */}
           <div
-            className={`lg:block lg:rounded-2xl lg:border lg:border-slate-200 dark:lg:border-slate-800 lg:shadow-sm lg:overflow-hidden transition-[max-height,opacity] duration-200 overflow-hidden ${
+            className={`lg:block lg:rounded-2xl lg:border lg:border-slate-200 dark:lg:border-[#282828] lg:shadow-sm lg:overflow-hidden transition-[max-height,opacity] duration-200 overflow-hidden ${
               keypadExpanded ? 'max-h-[360px] opacity-100' : 'max-h-0 opacity-0 lg:max-h-none lg:opacity-100'
             }`}
           >
-            <div className="hidden lg:flex items-center justify-between px-4 py-2.5 bg-white dark:bg-[#12161f] border-b border-slate-200 dark:border-slate-800">
+            <div className="hidden lg:flex items-center justify-between px-4 py-2.5 bg-white dark:bg-[#1e1e1e] border-b border-slate-200 dark:border-[#282828]">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                 Calculadora ({activeCode})
               </span>
-              <button
-                type="button"
-                onClick={handlePercent}
-                className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <Percent className="w-3.5 h-3.5" />
-                <span>Desconto %</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomRateModal(true)}
+                  className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#4f86c6] flex items-center gap-1 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Minha taxa</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEquals}
+                  className="px-2.5 py-1 rounded-lg bg-[#e09f5a] text-[#141414] text-xs font-bold hover:opacity-90 cursor-pointer"
+                >
+                  Calcular (=)
+                </button>
+              </div>
             </div>
             <Keypad
               onDigit={handleDigit}
@@ -895,28 +777,28 @@ export default function App() {
               onBackspace={handleBackspace}
               onClear={handleClear}
               onOperator={handleOperator}
-              onEquals={handleEquals}
               onSwapTopTwo={handleSwapTopTwo}
+              onToggleCollapse={() => setKeypadExpanded((prev) => !prev)}
               activeOperator={pendingOperator}
             />
           </div>
 
           {/* Desktop Inline Historical Chart Card */}
-          <div className="hidden lg:block bg-white dark:bg-[#12161f] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
+          <div className="hidden lg:block bg-white dark:bg-[#1e1e1e] rounded-2xl border border-slate-200 dark:border-[#282828] shadow-sm p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                   Histórico {activeCode} → {chartTargetCode}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Clique no ícone de gráfico em qualquer moeda
+                  Toque no ícone de gráfico em qualquer moeda
                 </p>
               </div>
               <select
                 aria-label="Selecionar moeda do gráfico"
                 value={chartTargetCode}
                 onChange={(e) => setChartTargetCode(e.target.value)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-[#141414] border border-slate-200 dark:border-[#303030] text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-[#4f86c6]"
               >
                 {selectedCodes
                   .filter((c) => c !== activeCode)
@@ -938,7 +820,7 @@ export default function App() {
       </main>
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="lg:hidden bg-white dark:bg-[#12161f] border-t border-slate-200 dark:border-slate-800 px-2 py-1 grid grid-cols-4 text-[11px] font-semibold shrink-0 z-20">
+      <nav className="lg:hidden bg-white dark:bg-[#1a1a1a] border-t border-slate-200 dark:border-[#292929] px-2 py-1.5 grid grid-cols-4 text-xs font-medium shrink-0 z-20">
         <button
           type="button"
           onClick={() => {
@@ -947,34 +829,34 @@ export default function App() {
             setShowCustomRateModal(false);
             setShowInstallModal(false);
           }}
-          className="flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[44px] rounded-xl text-sky-600 dark:text-sky-400 cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 py-1 min-h-[44px] rounded-xl text-[#4f86c6] cursor-pointer"
         >
-          <ArrowLeftRight className="w-4 h-4" />
-          <span>Converter</span>
+          <ArrowLeftRight className="w-5 h-5" />
+          <span>Conversor</span>
         </button>
         <button
           type="button"
           onClick={() => setShowChartModal(true)}
-          className="flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[44px] rounded-xl text-slate-500 dark:text-slate-400 hover:text-sky-600 transition cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 py-1 min-h-[44px] rounded-xl text-slate-500 dark:text-[#9a9a9a] hover:text-[#4f86c6] transition cursor-pointer"
         >
-          <TrendingUp className="w-4 h-4" />
+          <TrendingUp className="w-5 h-5" />
           <span>Gráficos</span>
         </button>
         <button
           type="button"
-          onClick={() => setShowCustomRateModal(true)}
-          className="flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[44px] rounded-xl text-slate-500 dark:text-slate-400 hover:text-sky-600 transition cursor-pointer"
+          onClick={handleEquals}
+          className="flex flex-col items-center justify-center gap-1 py-1 min-h-[44px] rounded-xl text-[#e09f5a] hover:opacity-80 transition font-bold cursor-pointer"
         >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span>Minha Taxa</span>
+          <Equal className="w-5 h-5" />
+          <span>Calcular (=)</span>
         </button>
         <button
           type="button"
-          onClick={handlePercent}
-          className="flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[44px] rounded-xl text-slate-500 dark:text-slate-400 hover:text-sky-600 transition cursor-pointer"
+          onClick={() => setShowCustomRateModal(true)}
+          className="flex flex-col items-center justify-center gap-1 py-1 min-h-[44px] rounded-xl text-slate-500 dark:text-[#9a9a9a] hover:text-[#4f86c6] transition cursor-pointer"
         >
-          <Percent className="w-4 h-4" />
-          <span>Desconto %</span>
+          <Pencil className="w-5 h-5" />
+          <span>Minha taxa</span>
         </button>
       </nav>
 
