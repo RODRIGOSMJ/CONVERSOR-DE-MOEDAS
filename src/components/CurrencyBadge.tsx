@@ -214,6 +214,30 @@ export const CurrencyBadge: React.FC<CurrencyBadgeProps> = ({ info, size = 'md' 
             </svg>
           </div>
         );
+      case 'doge':
+        return (
+          <div className={`${cryptoSize} rounded-full bg-gradient-to-br from-[#e2b949] to-[#b58a1c] flex items-center justify-center shadow-sm shrink-0`}>
+            <svg viewBox="0 0 32 32" className={`${iconClass} fill-white`} aria-hidden="true">
+              <path d="M12.2 8.2h5.1c4.6 0 7.7 2.8 7.7 7.8s-3.1 7.8-7.7 7.8h-5.1v-6.3H9.8v-2.8h2.4V8.2zm3.2 2.9v3.6h3.2v2.8h-3.2v3.4h1.9c2.7 0 4.4-1.7 4.4-4.9s-1.7-4.9-4.4-4.9h-1.9z" />
+            </svg>
+          </div>
+        );
+      case 'xrp':
+        return (
+          <div className={`${cryptoSize} rounded-full bg-gradient-to-br from-[#23292f] to-[#0f1317] ring-1 ring-slate-500/40 flex items-center justify-center shadow-sm shrink-0`}>
+            <svg viewBox="0 0 32 32" className="w-5 h-5 fill-white" aria-hidden="true">
+              <path d="M23.6 8.5h2.9l-6.1 6c-2.4 2.3-6.3 2.3-8.7 0l-6.1-6h2.9l4.7 4.6c1.6 1.5 4.1 1.5 5.7 0l4.7-4.6zm-15.2 15H5.5l6.1-6c2.4-2.3 6.3-2.3 8.7 0l6.1 6h-2.9l-4.7-4.6c-1.6-1.5-4.1-1.5-5.7 0l-4.7 4.6z" />
+            </svg>
+          </div>
+        );
+      case 'ltc':
+        return (
+          <div className={`${cryptoSize} rounded-full bg-gradient-to-br from-[#345d9d] to-[#1e3a6e] flex items-center justify-center shadow-sm shrink-0`}>
+            <svg viewBox="0 0 32 32" className="w-5 h-5 fill-white" aria-hidden="true">
+              <path d="M14.3 18.6l-1.9.7.7-2.6 1.9-.7 2.1-8h4.2l-1.7 6.4 2.1-.8-.7 2.6-2.1.8-1 3.7h7.3l-.9 3.3H10.9l3.4-5.4z" />
+            </svg>
+          </div>
+        );
       case 'pol':
         return (
           <div className={`${cryptoSize} rounded-full bg-gradient-to-br from-[#8247e5] to-[#5b21b6] flex items-center justify-center shadow-sm shrink-0`}>

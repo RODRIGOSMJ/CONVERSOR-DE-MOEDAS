@@ -3,7 +3,7 @@ export interface CurrencyInfo {
   name: string;
   symbol: string;
   country?: string;
-  crypto?: 'btc' | 'eth' | 'sol' | 'pol' | 'trx' | 'bnb';
+  crypto?: 'btc' | 'eth' | 'sol' | 'doge' | 'xrp' | 'ltc' | 'pol' | 'trx' | 'bnb';
   coingeckoId?: string;
   decimals: number;
 }
@@ -26,6 +26,9 @@ export const ALL_CURRENCIES: CurrencyInfo[] = [
   { code: 'BTC', name: 'Bitcoin', symbol: '₿', crypto: 'btc', coingeckoId: 'bitcoin', decimals: 6 },
   { code: 'ETH', name: 'Ethereum', symbol: 'Ξ', crypto: 'eth', coingeckoId: 'ethereum', decimals: 5 },
   { code: 'SOL', name: 'Solana', symbol: '◎', crypto: 'sol', coingeckoId: 'solana', decimals: 4 },
+  { code: 'DOGE', name: 'Dogecoin', symbol: 'Ð', crypto: 'doge', coingeckoId: 'dogecoin', decimals: 3 },
+  { code: 'XRP', name: 'XRP', symbol: '✕', crypto: 'xrp', coingeckoId: 'ripple', decimals: 3 },
+  { code: 'LTC', name: 'Litecoin', symbol: 'Ł', crypto: 'ltc', coingeckoId: 'litecoin', decimals: 4 },
   { code: 'POL', name: 'Polygon', symbol: '⬡', crypto: 'pol', coingeckoId: 'polygon-ecosystem-token', decimals: 3 },
   { code: 'TRX', name: 'TRON', symbol: '◈', crypto: 'trx', coingeckoId: 'tron', decimals: 3 },
   { code: 'BNB', name: 'BNB Chain', symbol: '❖', crypto: 'bnb', coingeckoId: 'binancecoin', decimals: 4 },
@@ -35,7 +38,20 @@ export const CURRENCY_MAP: Record<string, CurrencyInfo> = Object.fromEntries(
   ALL_CURRENCIES.map((c) => [c.code, c])
 );
 
-export const DEFAULT_SELECTED_CODES = ['USD', 'BRL', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'];
+export const DEFAULT_SELECTED_CODES = [
+  'USD',
+  'BRL',
+  'EUR',
+  'BTC',
+  'ETH',
+  'SOL',
+  'DOGE',
+  'XRP',
+  'LTC',
+  'POL',
+  'TRX',
+  'BNB',
+];
 
 export const DEFAULT_RATES_USD: Record<string, number> = {
   USD: 1,
@@ -55,6 +71,9 @@ export const DEFAULT_RATES_USD: Record<string, number> = {
   BTC: 1 / 89500,
   ETH: 1 / 3150,
   SOL: 1 / 215,
+  DOGE: 1 / 0.38,
+  XRP: 1 / 2.45,
+  LTC: 1 / 95.0,
   POL: 1 / 0.55,
   TRX: 1 / 0.24,
   BNB: 1 / 620,

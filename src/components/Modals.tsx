@@ -61,7 +61,7 @@ export const AddCurrencyModal: React.FC<AddCurrencyModalProps> = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar moeda (USD, BRL, BTC, ETH, SOL, POL, TRX, BNB...)"
+            placeholder="Buscar moeda (USD, BRL, BTC, ETH, SOL, DOGE, XRP, LTC...)"
             autoFocus
             className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-100 dark:bg-[#141414] border border-slate-300 dark:border-[#333333] focus:outline-none focus:border-[#4f86c6] text-slate-900 dark:text-white"
           />

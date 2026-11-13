@@ -34,7 +34,7 @@ import {
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { usePWAInstall } from './hooks/usePWAInstall';
 
-const STORAGE_KEY = 'conversor_plus_state_v6';
+const STORAGE_KEY = 'conversor_plus_state_v7';
 
 interface PersistedState {
   selectedCodes?: string[];
@@ -63,11 +63,16 @@ function loadPersistedState(): PersistedState {
 export default function App() {
   const initialSaved = useMemo(() => loadPersistedState(), []);
 
-  const [selectedCodes, setSelectedCodes] = useState<string[]>(() =>
-    Array.isArray(initialSaved.selectedCodes) && initialSaved.selectedCodes.length >= 2
-      ? initialSaved.selectedCodes
-      : DEFAULT_SELECTED_CODES
-  );
+  const [selectedCodes, setSelectedCodes] = useState<string[]>(() => {
+    if (Array.isArray(initialSaved.selectedCodes) && initialSaved.selectedCodes.length >= 2) {
+      const list = [...initialSaved.selectedCodes];
+      ['DOGE', 'XRP', 'LTC'].forEach((c) => {
+        if (!list.includes(c)) list.push(c);
+      });
+      return list;
+    }
+    return DEFAULT_SELECTED_CODES;
+  });
   const [activeCode, setActiveCode] = useState<string>(() => {
     const list =
       Array.isArray(initialSaved.selectedCodes) && initialSaved.selectedCodes.length >= 2
@@ -254,6 +259,9 @@ export default function App() {
             'BTCUSDT',
             'ETHUSDT',
             'SOLUSDT',
+            'DOGEUSDT',
+            'XRPUSDT',
+            'LTCUSDT',
             'POLUSDT',
             'TRXUSDT',
             'BNBUSDT',
@@ -273,6 +281,9 @@ export default function App() {
                 if (item.symbol === 'BTCUSDT') nextRates.BTC = 1 / p;
                 else if (item.symbol === 'ETHUSDT') nextRates.ETH = 1 / p;
                 else if (item.symbol === 'SOLUSDT') nextRates.SOL = 1 / p;
+                else if (item.symbol === 'DOGEUSDT') nextRates.DOGE = 1 / p;
+                else if (item.symbol === 'XRPUSDT') nextRates.XRP = 1 / p;
+                else if (item.symbol === 'LTCUSDT') nextRates.LTC = 1 / p;
                 else if (item.symbol === 'POLUSDT') nextRates.POL = 1 / p;
                 else if (item.symbol === 'TRXUSDT') nextRates.TRX = 1 / p;
                 else if (item.symbol === 'BNBUSDT') nextRates.BNB = 1 / p;
@@ -287,7 +298,7 @@ export default function App() {
 
         try {
           const cgRes = await fetch(
-            `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,polygon-ecosystem-token,matic-network,tron,binancecoin&vs_currencies=usd&t=${Date.now()}`,
+            `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,dogecoin,ripple,litecoin,polygon-ecosystem-token,matic-network,tron,binancecoin&vs_currencies=usd&t=${Date.now()}`,
             { cache: 'no-store' }
           );
           if (cgRes.ok) {
@@ -295,6 +306,9 @@ export default function App() {
             if (cryptoData.bitcoin?.usd) nextRates.BTC = 1 / cryptoData.bitcoin.usd;
             if (cryptoData.ethereum?.usd) nextRates.ETH = 1 / cryptoData.ethereum.usd;
             if (cryptoData.solana?.usd) nextRates.SOL = 1 / cryptoData.solana.usd;
+            if (cryptoData.dogecoin?.usd) nextRates.DOGE = 1 / cryptoData.dogecoin.usd;
+            if (cryptoData.ripple?.usd) nextRates.XRP = 1 / cryptoData.ripple.usd;
+            if (cryptoData.litecoin?.usd) nextRates.LTC = 1 / cryptoData.litecoin.usd;
             const polPrice =
               cryptoData['polygon-ecosystem-token']?.usd || cryptoData['matic-network']?.usd;
             if (polPrice) nextRates.POL = 1 / polPrice;
