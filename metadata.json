@@ -1,0 +1,6 @@
+{
+  "name": "Conversor de Moedas Plus",
+  "description": "Conversor de moedas e criptomoedas em tempo real com calculadora integrada, gráficos históricos, taxas personalizadas e modo offline PWA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
