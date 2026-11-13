@@ -35,7 +35,7 @@ export const CURRENCY_MAP: Record<string, CurrencyInfo> = Object.fromEntries(
   ALL_CURRENCIES.map((c) => [c.code, c])
 );
 
-export const DEFAULT_SELECTED_CODES = ['BRL', 'USD', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'];
+export const DEFAULT_SELECTED_CODES = ['USD', 'BRL', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'];
 
 export const DEFAULT_RATES_USD: Record<string, number> = {
   USD: 1,

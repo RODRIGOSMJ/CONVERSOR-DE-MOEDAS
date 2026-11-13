@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CONVERSOR PLUS">
+    <title>CONVERSOR PLUS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <!-- Chart.js para histórico de cotações -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Fonte Roboto (limpa, robusta e altamente legível no mobile) -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            overscroll-behavior-y: contain;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Roboto', sans-serif;
+            font-variant-numeric: tabular-nums;
+        }
+        .keypad-btn {
+            transition: background-color 0.08s ease, transform 0.07s ease;
+            user-select: none;
+        }
+        .keypad-btn:active {
+            transform: scale(0.95);
+        }
+        .currency-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .currency-scroll::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 9999px;
+        }
+        #keypad-drawer {
+            transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+        }
+        .currency-row-item {
+            transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+            touch-action: pan-y;
+        }
+        .drag-handle {
+            touch-action: none;
+            cursor: grab;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        .currency-row-dragging {
+            opacity: 0.96;
+            transform: scale(1.02);
+            box-shadow: 0 12px 28px -6px rgba(79, 134, 198, 0.45);
+            z-index: 30;
+            position: relative;
+        }
+        .currency-row-over {
+            border-top: 2.5px solid #4f86c6 !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-200 dark:bg-[#0d0d0d] text-slate-900 dark:text-[#f2f2f2] font-sans antialiased h-screen overflow-hidden flex items-center justify-center">
+
+    <!-- Container de Toast -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none px-4"></div>
+
+    <!-- Moldura Principal Mobile Clean -->
+    <div class="w-full h-full sm:h-[94vh] sm:max-w-[440px] bg-white dark:bg-[#141414] sm:rounded-[28px] sm:border sm:border-slate-300 dark:sm:border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden relative">
+
+        <!-- TOP BAR CLEAN & ROBUSTA COM MENU NOS TRÊS PONTINHOS -->
+        <header class="bg-slate-100 dark:bg-[#1e1e1e] text-slate-900 dark:text-white px-4 py-3.5 flex items-center justify-between shrink-0 z-30 border-b border-slate-200 dark:border-[#282828] relative">
+            <button onclick="toggleTheme()" class="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200" title="Alternar tema claro/escuro">
+                <i data-lucide="sun" id="theme-icon" class="w-5 h-5"></i>
+            </button>
+
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-base sm:text-lg tracking-wide">CONVERSOR <span class="font-normal">PLUS</span></span>
+                <span class="px-2 py-0.5 rounded-full bg-[#4f86c6] text-[#0f172a] font-extrabold text-[11px] tracking-wider">PRO</span>
+            </div>
+
+            <div class="flex items-center gap-0.5 relative">
+                <button onclick="toggleKeypad()" class="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200" title="Recolher / Expandir teclado">
+                    <i data-lucide="chevron-down" id="keypad-chevron" class="w-5 h-5 transition-transform duration-200"></i>
+                </button>
+                <button id="top-menu-btn" onclick="toggleTopMenu(event)" class="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition text-slate-700 dark:text-slate-200" title="Mais opções">
+                    <i data-lucide="more-vertical" class="w-5 h-5"></i>
+                </button>
+
+                <!-- Menu Suspenso dos Três Pontinhos -->
+                <div id="top-dropdown-menu" class="hidden absolute right-0 top-11 w-56 rounded-2xl bg-white dark:bg-[#232323] border border-slate-200 dark:border-[#363636] shadow-2xl py-1.5 z-50 overflow-hidden">
+                    <button onclick="closeTopMenu(); openAddCurrencyModal()" class="w-full px-4 py-3 text-left text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#2f2f2f] flex items-center gap-3 transition">
+                        <i data-lucide="list-plus" class="w-4 h-4 text-[#4f86c6]"></i>
+                        <span>Gerenciar moedas</span>
+                    </button>
+                    <div class="h-px bg-slate-200 dark:bg-[#333333] mx-3"></div>
+                    <button onclick="closeTopMenu(); openInstallHelpModal()" class="w-full px-4 py-3 text-left text-sm font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#2f2f2f] flex items-center gap-3 transition">
+                        <i data-lucide="download" class="w-4 h-4 text-emerald-500"></i>
+                        <span>Baixar aplicativo</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- BARRA DE STATUS / DATA ATUALIZAÇÃO (Clean e centralizada) -->
+        <div onclick="fetchLiveRates(true)" class="bg-slate-50 dark:bg-[#141414] text-slate-500 dark:text-[#9e9e9e] text-xs sm:text-[13px] font-medium py-1.5 px-4 text-center border-b border-slate-200/70 dark:border-[#222222] cursor-pointer hover:text-sky-500 transition shrink-0">
+            <span id="sync-status-text">Atualizado agora • Puxe para baixo para atualizar</span>
+        </div>
+
+        <!-- INDICADOR VISUAL DE PULL-TO-REFRESH (PUXAR PARA ATUALIZAR) -->
+        <div id="pull-refresh-indicator" class="overflow-hidden transition-all duration-150 bg-slate-100/90 dark:bg-[#19202a] flex items-center justify-center gap-2 text-xs font-bold text-[#4f86c6] shrink-0" style="height: 0px; opacity: 0;">
+            <i data-lucide="refresh-cw" id="pull-refresh-icon" class="w-4 h-4 transition-transform duration-150"></i>
+            <span id="pull-refresh-label">Puxe para atualizar cotações</span>
+        </div>
+
+        <!-- BARRA DE EXPRESSÃO MATEMÁTICA ATIVA (Quando usa +, −, ×, ÷) -->
+        <div id="expression-banner" class="hidden bg-sky-50 dark:bg-[#1d2733] border-b border-sky-200 dark:border-[#2b3b4e] px-4 py-2 flex items-center justify-between text-sm shrink-0">
+            <span class="text-slate-600 dark:text-slate-300 font-medium">
+                Conta (<strong id="expr-currency-code" class="text-slate-900 dark:text-white">USD</strong>):
+            </span>
+            <span id="expression-text" class="font-bold text-base text-sky-600 dark:text-[#6aa3e8]">100 + 50</span>
+        </div>
+
+        <!-- LISTA DE MOEDAS SIMULTÂNEAS (Com mais espaço vertical e arrastar/soltar fluido) -->
+        <div id="currency-list-container" class="flex-1 overflow-y-auto currency-scroll divide-y divide-slate-200 dark:divide-[#232323] bg-white dark:bg-[#141414]">
+            <!-- Linhas geradas dinamicamente -->
+        </div>
+
+        <!-- TECLADO NUMÉRICO ROBUSTO -->
+        <div id="keypad-drawer" class="bg-slate-100 dark:bg-[#1d1d1d] rounded-t-2xl border-t border-slate-200 dark:border-[#2a2a2a] shrink-0 overflow-hidden max-h-[340px] opacity-100">
+            <!-- Tracinho indicador superior estilo gaveta mobile -->
+            <div onclick="toggleKeypad()" class="w-full py-1.5 flex justify-center cursor-pointer">
+                <div class="w-8 h-1 rounded-full bg-slate-300 dark:bg-[#4a4a4a]"></div>
+            </div>
+
+            <div class="px-2.5 pb-2.5 grid grid-cols-4 gap-2">
+                <!-- Linha 1: C, 7, 8, 9 -->
+                <button onclick="pressClear()" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-[#d9534f] font-medium text-2xl shadow-xs">
+                    C
+                </button>
+                <button onclick="pressDigit('7')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    7
+                </button>
+                <button onclick="pressDigit('8')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    8
+                </button>
+                <button onclick="pressDigit('9')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    9
+                </button>
+
+                <!-- Linha 2: Inverter (⇄), 4, 5, 6 -->
+                <button onclick="swapTopTwoCurrencies()" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-[#4f86c6] font-bold text-xl shadow-xs flex items-center justify-center" title="Inverter moedas principais">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                </button>
+                <button onclick="pressDigit('4')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    4
+                </button>
+                <button onclick="pressDigit('5')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    5
+                </button>
+                <button onclick="pressDigit('6')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    6
+                </button>
+
+                <!-- Linha 3 & 4 Esquerda: Bloco de Operações (+ − × ÷) e (=) -->
+                <div class="row-span-2 grid grid-cols-2 gap-1 rounded-xl bg-white dark:bg-[#2a2a2a] p-1.5 shadow-xs">
+                    <button onclick="pressOperator('+')" class="keypad-btn rounded-lg hover:bg-slate-100 dark:hover:bg-[#383838] text-[#e09f5a] font-bold text-xl flex items-center justify-center">+</button>
+                    <button onclick="pressOperator('-')" class="keypad-btn rounded-lg hover:bg-slate-100 dark:hover:bg-[#383838] text-[#e09f5a] font-bold text-xl flex items-center justify-center">−</button>
+                    <button onclick="pressOperator('*')" class="keypad-btn rounded-lg hover:bg-slate-100 dark:hover:bg-[#383838] text-[#e09f5a] font-bold text-xl flex items-center justify-center">×</button>
+                    <button onclick="pressOperator('/')" class="keypad-btn rounded-lg hover:bg-slate-100 dark:hover:bg-[#383838] text-[#e09f5a] font-bold text-xl flex items-center justify-center">÷</button>
+                </div>
+
+                <button onclick="pressDigit('1')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    1
+                </button>
+                <button onclick="pressDigit('2')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    2
+                </button>
+                <button onclick="pressDigit('3')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    3
+                </button>
+
+                <!-- Linha 4 Direita: 0, Vírgula (,), Apagar -->
+                <button onclick="pressDigit('0')" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    0
+                </button>
+                <button onclick="pressDecimal()" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-900 dark:text-[#f2f2f2] font-normal text-2xl shadow-xs">
+                    ,
+                </button>
+                <button onclick="pressBackspace()" class="keypad-btn h-13 py-2.5 rounded-xl bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333333] text-slate-800 dark:text-[#f2f2f2] font-bold text-xl shadow-xs flex items-center justify-center">
+                    <i data-lucide="delete" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- BARRA INFERIOR DE NAVEGAÇÃO (Conversor | Gráficos | Igual = | Minha taxa) -->
+        <nav class="bg-white dark:bg-[#1a1a1a] border-t border-slate-200 dark:border-[#292929] px-2 py-2 grid grid-cols-4 text-xs font-medium shrink-0 z-20">
+            <button onclick="focusConverterTab()" id="nav-converter" class="flex flex-col items-center justify-center gap-1 py-1 rounded-xl text-[#4f86c6]">
+                <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
+                <span>Conversor</span>
+            </button>
+            <button onclick="openChartModal()" id="nav-charts" class="flex flex-col items-center justify-center gap-1 py-1 rounded-xl text-slate-500 dark:text-[#9a9a9a] hover:text-[#4f86c6] transition">
+                <i data-lucide="trending-up" class="w-5 h-5"></i>
+                <span>Gráficos</span>
+            </button>
+            <button onclick="pressEquals()" id="nav-equals" class="flex flex-col items-center justify-center gap-1 py-1 rounded-xl text-[#e09f5a] hover:opacity-80 transition font-bold">
+                <i data-lucide="equal" class="w-5 h-5"></i>
+                <span>Calcular (=)</span>
+            </button>
+            <button onclick="openCustomRateModal()" id="nav-rate" class="flex flex-col items-center justify-center gap-1 py-1 rounded-xl text-slate-500 dark:text-[#9a9a9a] hover:text-[#4f86c6] transition">
+                <i data-lucide="pencil" class="w-5 h-5"></i>
+                <span>Minha taxa</span>
+            </button>
+        </nav>
+
+        <!-- ========================================== -->
+        <!-- MODAL: BAIXAR APLICATIVO                   -->
+        <!-- ========================================== -->
+        <div id="install-help-modal" class="hidden absolute inset-0 z-40 bg-black/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+            <div class="bg-white dark:bg-[#1e1e1e] w-full sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl border border-slate-200 dark:border-[#2e2e2e] space-y-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2 rounded-xl bg-[#4f86c6]/15 text-[#4f86c6]">
+                            <i data-lucide="smartphone" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base text-slate-900 dark:text-white">Baixar Aplicativo</h3>
+                            <p class="text-xs text-slate-500">Para celular e tablet (Android / iOS)</p>
+                        </div>
+                    </div>
+                    <button onclick="closeInstallHelpModal()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2a2a] text-slate-500">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <button id="pwa-direct-install-btn" onclick="triggerPwaInstall()" class="hidden w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition">
+                    <i data-lucide="download-cloud" class="w-5 h-5"></i>
+                    Instalar Aplicativo Agora
+                </button>
+
+                <div class="bg-slate-100 dark:bg-[#141414] rounded-xl p-4 space-y-3 border border-slate-200 dark:border-[#2a2a2a]">
+                    <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed text-center">
+                        Clique abaixo para baixar o aplicativo diretamente para o seu celular ou tablet:
+                    </p>
+                    <button onclick="downloadHtmlAppFile()" class="w-full py-3.5 px-4 rounded-xl bg-[#4f86c6] hover:bg-[#5c94d6] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md transition">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                        <span>Baixar Aplicativo</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODAL: GERENCIAR MOEDAS                    -->
+        <!-- ========================================== -->
+        <div id="add-currency-modal" class="hidden absolute inset-0 z-40 bg-black/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+            <div class="bg-white dark:bg-[#1e1e1e] w-full sm:rounded-2xl rounded-t-2xl max-h-[84%] flex flex-col shadow-2xl border border-slate-200 dark:border-[#2e2e2e] overflow-hidden">
+                <div class="px-4 py-3.5 border-b border-slate-200 dark:border-[#2c2c2c] flex items-center justify-between">
+                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Gerenciar moedas</h3>
+                    <button onclick="closeAddCurrencyModal()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2a2a] text-slate-500">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-3 border-b border-slate-200 dark:border-[#2c2c2c]">
+                    <input type="text" id="currency-search-input" oninput="renderModalCurrencyList()" placeholder="Buscar moeda (USD, BRL, BTC, ETH, SOL, POL, TRX, BNB...)" class="w-full px-3.5 py-2.5 text-sm rounded-xl bg-slate-100 dark:bg-[#141414] border border-slate-300 dark:border-[#333333] focus:outline-none focus:border-[#4f86c6] text-slate-900 dark:text-white">
+                </div>
+                <div id="modal-currency-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#262626] p-2"></div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODAL: GRÁFICO HISTÓRICO                   -->
+        <!-- ========================================== -->
+        <div id="chart-modal" class="hidden absolute inset-0 z-40 bg-black/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+            <div class="bg-white dark:bg-[#1e1e1e] w-full sm:rounded-2xl rounded-t-2xl p-4 shadow-2xl border border-slate-200 dark:border-[#2e2e2e] space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 id="chart-modal-title" class="font-bold text-base text-slate-900 dark:text-white">Histórico USD → BRL</h3>
+                        <p id="chart-modal-subtitle" class="text-xs text-slate-500">Variação recente da cotação</p>
+                    </div>
+                    <button onclick="closeChartModal()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2a2a] text-slate-500">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 bg-slate-100 dark:bg-[#141414] p-1 rounded-xl text-xs font-bold">
+                    <button onclick="updateHistoryChart(7, this)" class="chart-range-btn py-1.5 rounded-lg bg-white dark:bg-[#2a2a2a] text-[#4f86c6] shadow-xs">7D</button>
+                    <button onclick="updateHistoryChart(30, this)" class="chart-range-btn py-1.5 rounded-lg text-slate-500">1M</button>
+                    <button onclick="updateHistoryChart(90, this)" class="chart-range-btn py-1.5 rounded-lg text-slate-500">3M</button>
+                    <button onclick="updateHistoryChart(365, this)" class="chart-range-btn py-1.5 rounded-lg text-slate-500">1A</button>
+                </div>
+                <div class="h-52 w-full">
+                    <canvas id="rate-history-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MODAL: MINHA TAXA PERSONALIZADA            -->
+        <!-- ========================================== -->
+        <div id="custom-rate-modal" class="hidden absolute inset-0 z-40 bg-black/70 backdrop-blur-xs flex flex-col justify-end sm:justify-center p-0 sm:p-4">
+            <div class="bg-white dark:bg-[#1e1e1e] w-full sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl border border-slate-200 dark:border-[#2e2e2e] space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-base text-slate-900 dark:text-white">Minha taxa personalizada</h3>
+                    <button onclick="closeCustomRateModal()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#2a2a2a] text-slate-500">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Defina uma cotação manual para substituir a taxa automática:
+                </p>
+                <div class="space-y-2">
+                    <label id="custom-rate-label" class="text-sm font-bold text-slate-700 dark:text-slate-200 block">1 USD vale quanto em BRL?</label>
+                    <input type="number" step="any" id="custom-rate-input" class="w-full px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-[#141414] border border-slate-300 dark:border-[#333333] text-lg font-bold text-slate-900 dark:text-white focus:outline-none focus:border-[#4f86c6]">
+                </div>
+                <div class="flex items-center justify-between gap-2 pt-1">
+                    <button onclick="resetCustomRate()" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-[#2a2a2a] text-sm font-bold text-slate-700 dark:text-slate-300 hover:opacity-90">
+                        Restaurar Oficial
+                    </button>
+                    <button onclick="saveCustomRate()" class="px-5 py-2.5 rounded-xl bg-[#4f86c6] hover:bg-[#5c94d6] text-white text-sm font-bold">
+                        Aplicar Taxa
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // BANCO DE MOEDAS, BANDEIRAS & ÍCONES OFICIAIS
+        // ==========================================
+        const ALL_CURRENCIES = [
+            { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$', country: 'br', decimals: 2 },
+            { code: 'USD', name: 'Dólar Americano', symbol: '$', country: 'us', decimals: 2 },
+            { code: 'EUR', name: 'Euro', symbol: '€', country: 'eu', decimals: 2 },
+            { code: 'GBP', name: 'Libra Esterlina', symbol: '£', country: 'gb', decimals: 2 },
+            { code: 'CAD', name: 'Dólar Canadense', symbol: 'C$', country: 'ca', decimals: 2 },
+            { code: 'AUD', name: 'Dólar Australiano', symbol: 'A$', country: 'au', decimals: 2 },
+            { code: 'JPY', name: 'Iene Japonês', symbol: '¥', country: 'jp', decimals: 0 },
+            { code: 'CHF', name: 'Franco Suíço', symbol: 'Fr', country: 'ch', decimals: 2 },
+            { code: 'ARS', name: 'Peso Argentino', symbol: '$', country: 'ar', decimals: 2 },
+            { code: 'PYG', name: 'Guarani Paraguaio', symbol: '₲', country: 'py', decimals: 0 },
+            { code: 'CLP', name: 'Peso Chileno', symbol: '$', country: 'cl', decimals: 0 },
+            { code: 'UYU', name: 'Peso Uruguaio', symbol: '$U', country: 'uy', decimals: 2 },
+            { code: 'MXN', name: 'Peso Mexicano', symbol: '$', country: 'mx', decimals: 2 },
+            { code: 'CNY', name: 'Yuan Chinês', symbol: '¥', country: 'cn', decimals: 2 },
+            { code: 'BTC', name: 'Bitcoin', symbol: '₿', crypto: 'btc', decimals: 6 },
+            { code: 'ETH', name: 'Ethereum', symbol: 'Ξ', crypto: 'eth', decimals: 5 },
+            { code: 'SOL', name: 'Solana', symbol: '◎', crypto: 'sol', decimals: 4 },
+            { code: 'POL', name: 'Polygon', symbol: '⬡', crypto: 'pol', decimals: 3 },
+            { code: 'TRX', name: 'TRON', symbol: '◈', crypto: 'trx', decimals: 3 },
+            { code: 'BNB', name: 'BNB Chain', symbol: '❖', crypto: 'bnb', decimals: 4 }
+        ];
+
+        // Ícones oficiais das criptomoedas e bandeiras retangulares nítidas (estilo do print)
+        function getCurrencyBadgeHtml(info, isModal = false) {
+            if (info.crypto) {
+                const sizeClass = isModal ? 'w-9 h-9' : 'w-10 h-10';
+                const cryptoSvgs = {
+                    btc: `<div class="${sizeClass} rounded-full bg-gradient-to-br from-[#f7931a] to-[#d97706] flex items-center justify-center shadow-sm shrink-0">
+                            <svg viewBox="0 0 32 32" class="w-6 h-6 fill-white"><path d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></svg>
+                          </div>`,
+                    eth: `<div class="${sizeClass} rounded-full bg-gradient-to-br from-[#627eea] to-[#3c54b8] flex items-center justify-center shadow-sm shrink-0">
+                            <svg viewBox="0 0 32 32" class="w-6 h-6 fill-white"><path d="M16.498 4v8.87l7.497 3.35z" fill-opacity="0.75"/><path d="M16.498 4L9 16.22l7.498-3.35z"/><path d="M16.498 21.968v6.027L24 17.616z" fill-opacity="0.75"/><path d="M16.498 27.995v-6.028L9 17.616z"/><path d="M16.498 20.573l7.497-4.353-7.497-3.348z" fill-opacity="0.55"/><path d="M9 16.22l7.498 4.353v-7.701z" fill-opacity="0.85"/></svg>
+                          </div>`,
+                    sol: `<div class="${sizeClass} rounded-full bg-[#181b26] flex items-center justify-center shadow-sm ring-1 ring-purple-500/40 shrink-0">
+                            <svg viewBox="0 0 397.7 311.7" class="w-5 h-5">
+                                <defs>
+                                    <linearGradient id="solGradClean" x1="0%" y1="100%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#9945FF"/>
+                                        <stop offset="50%" stop-color="#19FB9B"/>
+                                        <stop offset="100%" stop-color="#00FFA3"/>
+                                    </linearGradient>
+                                </defs>
+                                <path fill="url(#solGradClean)" d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z"/>
+                                <path fill="url(#solGradClean)" d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z"/>
+                                <path fill="url(#solGradClean)" d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z"/>
+                            </svg>
+                          </div>`,
+                    pol: `<div class="${sizeClass} rounded-full bg-gradient-to-br from-[#8247e5] to-[#5b21b6] flex items-center justify-center shadow-sm shrink-0">
+                            <svg viewBox="0 0 38.4 33.5" class="w-5 h-5 fill-white"><path d="M28.8 10.2c-.7-.4-1.6-.4-2.4 0l-5.6 3.3-3.8 2.1-5.6 3.3c-.7.4-1.6.4-2.4 0l-4.4-2.6c-.7-.4-1.2-1.2-1.2-2.1v-5.1c0-.8.4-1.6 1.2-2.1l4.4-2.5c.7-.4 1.6-.4 2.4 0l4.4 2.5c.7.4 1.2 1.2 1.2 2.1v3.3l3.8-2.2V6.9c0-.8-.4-1.6-1.2-2.1L11.4.3c-.7-.4-1.6-.4-2.4 0L1.2 4.8C.4 5.2 0 6 0 6.9v9.2c0 .8.4 1.6 1.2 2.1l7.8 4.5c.7.4 1.6.4 2.4 0l5.6-3.2 3.8-2.2 5.6-3.2c.7-.4 1.6-.4 2.4 0l4.4 2.5c.7.4 1.2 1.2 1.2 2.1v5.1c0 .8-.4 1.6-1.2 2.1l-4.4 2.6c-.7.4-1.6.4-2.4 0l-4.4-2.5c-.7-.4-1.2-1.2-1.2-2.1v-3.2l-3.8 2.2v3.3c0 .8.4 1.6 1.2 2.1l7.8 4.5c.7.4 1.6.4 2.4 0l7.8-4.5c.7-.4 1.2-1.2 1.2-2.1v-9.2c0-.8-.4-1.6-1.2-2.1l-7.8-4.6z"/></svg>
+                          </div>`,
+                    trx: `<div class="${sizeClass} rounded-full bg-gradient-to-br from-[#ef0027] to-[#b91c1c] flex items-center justify-center shadow-sm shrink-0">
+                            <svg viewBox="0 0 32 32" class="w-5 h-5 fill-white"><path d="M25.6 10.5L6.2 6.8l9.1 19.6 11.9-14.2-1.6-1.7zm-9.4 1.7l6.9 1.3-5.2 2.3-1.7-3.6zm-1.4.6l1.7 3.7-6.7-7.1 5 3.4zm2.2 4.5l6-2.7-6.8 8.2.8-5.5z"/></svg>
+                          </div>`,
+                    bnb: `<div class="${sizeClass} rounded-full bg-gradient-to-br from-[#f3ba2f] to-[#d99b16] flex items-center justify-center shadow-sm shrink-0">
+                            <svg viewBox="0 0 32 32" class="w-5 h-5 fill-white"><path d="M16 6.2l3.8 3.8-2.2 2.2-1.6-1.6-1.6 1.6-2.2-2.2L16 6.2zm-6 6l2.2 2.2-2.2 2.2-2.2-2.2L10 12.2zm12 0l2.2 2.2-2.2 2.2-2.2-2.2L22 12.2zM16 13.8l2.2 2.2-2.2 2.2-2.2-2.2 2.2-2.2zm0 8.4l1.6-1.6 2.2 2.2L16 26.6l-3.8-3.8 2.2-2.2 1.6 1.6z"/></svg>
+                          </div>`
+                };
+                return cryptoSvgs[info.crypto] || '';
+            }
+
+            // Bandeira retangular nítida com cantos suaves (exatamente como no print do usuário)
+            const flagSize = isModal ? 'w-10 h-7' : 'w-11 h-7';
+            const flagUrl = `https://flagcdn.com/w80/${info.country}.png`;
+            return `
+                <div class="${flagSize} rounded-[4px] overflow-hidden shadow-xs ring-1 ring-black/15 dark:ring-white/15 bg-slate-200 dark:bg-[#2a2a2a] flex items-center justify-center shrink-0">
+                    <img src="${flagUrl}" alt="${info.code}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="hidden w-full h-full items-center justify-center font-bold text-xs text-slate-700 dark:text-slate-200">${info.symbol}</span>
+                </div>
+            `;
+        }
+
+        const STORAGE_KEY = 'conversor_plus_state_v5';
+
+        const baseRatesUsd = {
+            USD: 1,
+            BRL: 5.64,
+            EUR: 0.92,
+            GBP: 0.79,
+            CAD: 1.39,
+            AUD: 1.53,
+            JPY: 153.5,
+            CHF: 0.88,
+            ARS: 1015.0,
+            PYG: 7850.0,
+            CLP: 965.0,
+            UYU: 42.3,
+            MXN: 20.15,
+            CNY: 7.22,
+            BTC: 1 / 89500,
+            ETH: 1 / 3150,
+            SOL: 1 / 215,
+            POL: 1 / 0.55,
+            TRX: 1 / 0.24,
+            BNB: 1 / 620
+        };
+
+        const appState = {
+            selectedCodes: ['USD', 'BRL', 'EUR', 'BTC', 'ETH', 'SOL', 'POL', 'TRX', 'BNB'],
+            activeCode: 'USD',
+            inputString: '1',
+            pendingOperator: null,
+            previousValue: null,
+            resetOnNextDigit: true,
+            keypadExpanded: true,
+            customRatesUsd: {},
+            chartInstance: null
+        };
+
+        function safeCreateIcons() {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            safeCreateIcons();
+            renderCurrencyRows();
+            fetchLiveRates(false);
+            initPhysicalKeyboard();
+            initPullToRefresh();
+            setupPwaSupport();
+
+            document.addEventListener('click', (e) => {
+                const menu = document.getElementById('top-dropdown-menu');
+                const btn = document.getElementById('top-menu-btn');
+                if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+            });
+
+            setInterval(() => {
+                fetchLiveRates(false);
+            }, 5000);
+        });
+
+        function toggleTopMenu(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('top-dropdown-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+                safeCreateIcons();
+            }
+        }
+
+        function closeTopMenu() {
+            const menu = document.getElementById('top-dropdown-menu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        // ==========================================
+        // SUPORTE PWA & DOWNLOAD
+        // ==========================================
+        let deferredInstallPrompt = null;
+
+        function setupPwaSupport() {
+            const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#1e1e1e"/><rect x="86" y="76" width="340" height="84" rx="18" fill="#4f86c6"/><text x="396" y="136" font-family="sans-serif" font-weight="bold" font-size="52" fill="#ffffff" text-anchor="end">548</text><rect x="86" y="186" width="102" height="102" rx="18" fill="#2a2a2a"/><text x="137" y="254" font-family="sans-serif" font-weight="bold" font-size="54" fill="#ffffff" text-anchor="middle">$</text><rect x="205" y="186" width="102" height="102" rx="18" fill="#2a2a2a"/><text x="256" y="254" font-family="sans-serif" font-weight="bold" font-size="54" fill="#ffffff" text-anchor="middle">€</text><rect x="86" y="306" width="102" height="102" rx="18" fill="#2a2a2a"/><text x="137" y="374" font-family="sans-serif" font-weight="bold" font-size="54" fill="#ffffff" text-anchor="middle">£</text><rect x="205" y="306" width="102" height="102" rx="18" fill="#2a2a2a"/><text x="256" y="374" font-family="sans-serif" font-weight="bold" font-size="54" fill="#ffffff" text-anchor="middle">¥</text><rect x="324" y="186" width="102" height="222" rx="18" fill="#e09f5a"/><text x="375" y="318" font-family="sans-serif" font-weight="bold" font-size="72" fill="#ffffff" text-anchor="middle">=</text></svg>`;
+            const iconUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
+
+            const manifest = {
+                name: 'CONVERSOR PLUS',
+                short_name: 'Conversor Plus',
+                start_url: '.',
+                display: 'standalone',
+                background_color: '#141414',
+                theme_color: '#1e1e1e',
+                icons: [{ src: iconUrl, sizes: '512x512', type: 'image/svg+xml' }]
+            };
+
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = URL.createObjectURL(manifestBlob);
+            document.head.appendChild(manifestLink);
+
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredInstallPrompt = e;
+                const directBtn = document.getElementById('pwa-direct-install-btn');
+                if (directBtn) directBtn.classList.remove('hidden');
+            });
+        }
+
+        function openInstallHelpModal() {
+            document.getElementById('install-help-modal').classList.remove('hidden');
+            safeCreateIcons();
+        }
+
+        function closeInstallHelpModal() {
+            document.getElementById('install-help-modal').classList.add('hidden');
+        }
+
+        async function triggerPwaInstall() {
+            if (!deferredInstallPrompt) {
+                showToast('Use o menu (⋮) do navegador > "Adicionar à tela inicial".');
+                return;
+            }
+            deferredInstallPrompt.prompt();
+            const { outcome } = await deferredInstallPrompt.userChoice;
+            if (outcome === 'accepted') {
+                showToast('Aplicativo instalado na tela inicial!');
+                closeInstallHelpModal();
+            }
+            deferredInstallPrompt = null;
+        }
+
+        function downloadHtmlAppFile() {
+            const fullHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'index.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Aplicativo baixado com sucesso!');
+        }
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    selectedCodes: appState.selectedCodes,
+                    activeCode: appState.activeCode,
+                    inputString: appState.inputString,
+                    baseRatesUsd,
+                    customRatesUsd: appState.customRatesUsd
+                }));
+            } catch (e) {}
+        }
+
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (Array.isArray(saved.selectedCodes) && saved.selectedCodes.length >= 2) {
+                    appState.selectedCodes = [...saved.selectedCodes];
+                }
+                if (saved.activeCode && appState.selectedCodes.includes(saved.activeCode)) {
+                    appState.activeCode = saved.activeCode;
+                }
+                if (typeof saved.inputString === 'string' && saved.inputString.length > 0) {
+                    appState.inputString = saved.inputString;
+                }
+                if (saved.baseRatesUsd) {
+                    Object.assign(baseRatesUsd, saved.baseRatesUsd);
+                }
+                if (saved.customRatesUsd) {
+                    appState.customRatesUsd = saved.customRatesUsd;
+                }
+            } catch (e) {}
+        }
+
+        let isFetchingRates = false;
+
+        async function fetchLiveRates(manual = false) {
+            if (isFetchingRates) return;
+            isFetchingRates = true;
+
+            const statusText = document.getElementById('sync-status-text');
+            let updatedAny = false;
+
+            try {
+                // 1. Cotações Fiduciárias ao vivo (AwesomeAPI + fallback Open ER-API)
+                const fiatPromise = (async () => {
+                    try {
+                        const res = await fetch(`https://open.er-api.com/v6/latest/USD?t=${Date.now()}`, { cache: 'no-store' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data?.rates) {
+                                Object.keys(baseRatesUsd).forEach(code => {
+                                    if (data.rates[code]) baseRatesUsd[code] = data.rates[code];
+                                });
+                                updatedAny = true;
+                            }
+                        }
+                    } catch (e) {}
+
+                    try {
+                        const brlRes = await fetch(`https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,GBP-BRL?t=${Date.now()}`, { cache: 'no-store' });
+                        if (brlRes.ok) {
+                            const brlData = await brlRes.json();
+                            const usdBrl = parseFloat(brlData?.USDBRL?.bid);
+                            if (usdBrl > 0) {
+                                baseRatesUsd.BRL = usdBrl;
+                                updatedAny = true;
+                            }
+                        }
+                    } catch (e) {}
+                })();
+
+                // 2. Cotações Cripto em tempo real a cada 5s (Binance API rápida + fallback CoinGecko)
+                const cryptoPromise = (async () => {
+                    try {
+                        const binanceSymbols = JSON.stringify(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'POLUSDT', 'TRXUSDT', 'BNBUSDT']);
+                        const bRes = await fetch(`https://api.binance.com/api/v3/ticker/price?symbols=${encodeURIComponent(binanceSymbols)}`, { cache: 'no-store' });
+                        if (bRes.ok) {
+                            const list = await bRes.json();
+                            if (Array.isArray(list)) {
+                                list.forEach(item => {
+                                    const p = parseFloat(item.price);
+                                    if (!(p > 0)) return;
+                                    if (item.symbol === 'BTCUSDT') baseRatesUsd.BTC = 1 / p;
+                                    else if (item.symbol === 'ETHUSDT') baseRatesUsd.ETH = 1 / p;
+                                    else if (item.symbol === 'SOLUSDT') baseRatesUsd.SOL = 1 / p;
+                                    else if (item.symbol === 'POLUSDT') baseRatesUsd.POL = 1 / p;
+                                    else if (item.symbol === 'TRXUSDT') baseRatesUsd.TRX = 1 / p;
+                                    else if (item.symbol === 'BNBUSDT') baseRatesUsd.BNB = 1 / p;
+                                });
+                                updatedAny = true;
+                                return;
+                            }
+                        }
+                    } catch (e) {}
+
+                    try {
+                        const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,polygon-ecosystem-token,matic-network,tron,binancecoin&vs_currencies=usd&t=${Date.now()}`, { cache: 'no-store' });
+                        if (cgRes.ok) {
+                            const cryptoData = await cgRes.json();
+                            if (cryptoData.bitcoin?.usd) baseRatesUsd.BTC = 1 / cryptoData.bitcoin.usd;
+                            if (cryptoData.ethereum?.usd) baseRatesUsd.ETH = 1 / cryptoData.ethereum.usd;
+                            if (cryptoData.solana?.usd) baseRatesUsd.SOL = 1 / cryptoData.solana.usd;
+                            const polPrice = cryptoData['polygon-ecosystem-token']?.usd || cryptoData['matic-network']?.usd;
+                            if (polPrice) baseRatesUsd.POL = 1 / polPrice;
+                            if (cryptoData.tron?.usd) baseRatesUsd.TRX = 1 / cryptoData.tron.usd;
+                            if (cryptoData.binancecoin?.usd) baseRatesUsd.BNB = 1 / cryptoData.binancecoin.usd;
+                            updatedAny = true;
+                        }
+                    } catch (e) {}
+                })();
+
+                await Promise.all([fiatPromise, cryptoPromise]);
+
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                if (updatedAny) {
+                    statusText.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-1.5"></span>ONLINE • Atualizado às ${timeStr} (auto 5s)`;
+                    saveToStorage();
+                    // Atualiza APENAS os valores convertidos, sem resetar a moeda ativa, a ordem ou o número digitado
+                    if (!isDraggingRow && !activeDragState) {
+                        renderCurrencyRows();
+                    }
+                    if (manual) showToast('Cotações online atualizadas!');
+                } else {
+                    statusText.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping mr-1.5"></span>Reconectando servidor online...`;
+                    if (manual) showToast('Tentando reconectar às cotações online...');
+                }
+            } finally {
+                isFetchingRates = false;
+            }
+        }
+
+        function getEffectiveUsdRate(code) {
+            if (appState.customRatesUsd[code]) {
+                return appState.customRatesUsd[code];
+            }
+            return baseRatesUsd[code] || 1;
+        }
+
+        function getActiveNumericValue() {
+            const cleaned = appState.inputString.replace(',', '.');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+        }
+
+        // ==========================================
+        // RENDERIZAÇÃO LIMPA E ROBUSTA (IGUAL AO PRINT)
+        // ==========================================
+        function renderCurrencyRows() {
+            const container = document.getElementById('currency-list-container');
+            const activeValue = getActiveNumericValue();
+            const activeUsdRate = getEffectiveUsdRate(appState.activeCode);
+            const valueInUsd = activeUsdRate > 0 ? (activeValue / activeUsdRate) : 0;
+
+            const exprBanner = document.getElementById('expression-banner');
+            if (appState.pendingOperator && appState.previousValue !== null) {
+                const opMap = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+                document.getElementById('expr-currency-code').textContent = appState.activeCode;
+                document.getElementById('expression-text').textContent = `${formatDisplayNumber(appState.previousValue, 4)} ${opMap[appState.pendingOperator]} ${appState.inputString}`;
+                exprBanner.classList.remove('hidden');
+            } else {
+                exprBanner.classList.add('hidden');
+            }
+
+            container.innerHTML = appState.selectedCodes.map(code => {
+                const info = ALL_CURRENCIES.find(c => c.code === code) || { code, name: code, symbol: '$', country: 'un', decimals: 2 };
+                const isActive = code === appState.activeCode;
+                const targetUsdRate = getEffectiveUsdRate(code);
+                const isCustom = Boolean(appState.customRatesUsd[code]);
+                const iconBadgeHtml = getCurrencyBadgeHtml(info, false);
+
+                let displayValueStr = '';
+                if (isActive) {
+                    displayValueStr = formatRawInputString(appState.inputString);
+                } else {
+                    const convertedVal = valueInUsd * targetUsdRate;
+                    displayValueStr = formatDisplayNumber(convertedVal, info.decimals);
+                }
+
+                return `
+                    <div data-code="${code}" onclick="selectActiveCurrency('${code}')" class="currency-row-item pl-2 pr-4 py-3.5 flex items-center justify-between gap-2 cursor-pointer select-none ${isActive ? 'bg-sky-50 dark:bg-[#1f2936]' : 'hover:bg-slate-50 dark:hover:bg-[#1a1a1a]'}">
+                        <!-- Esquerda: Alça Arrastar + Bandeira/Ícone + Código Grande + Seta ▼ -->
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="drag-handle p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:text-[#666666] dark:hover:text-slate-300 shrink-0" title="Segure e arraste para reordenar">
+                                <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                            </div>
+                            ${iconBadgeHtml}
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xl sm:text-[22px] font-medium tracking-wide text-slate-900 dark:text-[#f2f2f2]">${info.code}</span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 dark:text-slate-300"></i>
+                                ${isCustom ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">Manual</span>' : ''}
+                            </div>
+                        </div>
+
+                        <!-- Direita: Número Grande e Robusto + Ícone de Gráfico -->
+                        <div class="flex items-center gap-2.5 shrink-0">
+                            ${isActive ? `
+                                <span class="px-2.5 py-0.5 rounded-[4px] bg-[#4b6a8e] text-white text-2xl sm:text-[26px] font-normal tracking-tight leading-snug">
+                                    ${displayValueStr}
+                                </span>
+                            ` : `
+                                <span class="text-2xl sm:text-[26px] font-normal tracking-tight text-slate-900 dark:text-[#ececec]">
+                                    ${displayValueStr}
+                                </span>
+                            `}
+
+                            <button onclick="event.stopPropagation(); openChartForPair('${appState.activeCode}', '${code}')" class="p-1.5 rounded-lg text-slate-400 hover:text-[#4f86c6] transition" title="Ver gráfico ${appState.activeCode}/${code}">
+                                <i data-lucide="trending-up" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            attachDragReorderHandlers();
+            safeCreateIcons();
+        }
+
+        // ==========================================
+        // ARRASTAR E SOLTAR MOEDAS (TOQUE & MOUSE)
+        // ==========================================
+        let isDraggingRow = false;
+        let suppressNextRowClick = false;
+        let activeDragState = null;
+
+        function attachDragReorderHandlers() {
+            const container = document.getElementById('currency-list-container');
+            const rows = Array.from(container.querySelectorAll('.currency-row-item'));
+
+            rows.forEach(row => {
+                let pressTimer = null;
+                let startY = 0;
+
+                const beginDrag = () => {
+                    isDraggingRow = true;
+                    suppressNextRowClick = true;
+                    activeDragState = {
+                        row,
+                        rows,
+                        hoverRow: null
+                    };
+                    row.classList.add('currency-row-dragging', 'bg-sky-100', 'dark:bg-[#253242]');
+                    if (navigator.vibrate) navigator.vibrate(25);
+                };
+
+                const onPointerDown = (e) => {
+                    if (e.target.closest('button')) return;
+                    const isHandle = Boolean(e.target.closest('.drag-handle'));
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    startY = clientY;
+
+                    if (isHandle) {
+                        if (e.cancelable) e.preventDefault();
+                        beginDrag();
+                    } else {
+                        pressTimer = setTimeout(beginDrag, 220);
+                    }
+                };
+
+                const cancelPressTimer = (e) => {
+                    if (!pressTimer) return;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    if (Math.abs(clientY - startY) > 8) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                };
+
+                const clearPressTimerOnly = () => {
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                };
+
+                row.addEventListener('mousedown', onPointerDown);
+                row.addEventListener('mousemove', cancelPressTimer);
+                row.addEventListener('mouseup', clearPressTimerOnly);
+
+                row.addEventListener('touchstart', onPointerDown, { passive: false });
+                row.addEventListener('touchmove', cancelPressTimer, { passive: true });
+                row.addEventListener('touchend', clearPressTimerOnly);
+                row.addEventListener('touchcancel', clearPressTimerOnly);
+            });
+        }
+
+        function handleGlobalDragMove(e) {
+            if (!activeDragState) return;
+            if (e.cancelable) e.preventDefault();
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const { row, rows } = activeDragState;
+
+            rows.forEach(r => r.classList.remove('currency-row-over'));
+            const targetRow = rows.find(r => {
+                if (r === row) return false;
+                const rect = r.getBoundingClientRect();
+                return clientY >= rect.top && clientY <= rect.bottom;
+            });
+
+            activeDragState.hoverRow = targetRow || null;
+            if (targetRow) {
+                targetRow.classList.add('currency-row-over');
+            }
+        }
+
+        function handleGlobalDragEnd() {
+            if (!activeDragState) return;
+
+            const { row, rows, hoverRow } = activeDragState;
+            row.classList.remove('currency-row-dragging', 'bg-sky-100', 'dark:bg-[#253242]');
+            rows.forEach(r => r.classList.remove('currency-row-over'));
+
+            if (hoverRow) {
+                const fromCode = row.dataset.code;
+                const toCode = hoverRow.dataset.code;
+                const fromIdx = appState.selectedCodes.indexOf(fromCode);
+                const toIdx = appState.selectedCodes.indexOf(toCode);
+
+                if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+                    appState.selectedCodes.splice(fromIdx, 1);
+                    appState.selectedCodes.splice(toIdx, 0, fromCode);
+                    saveToStorage();
+                    renderCurrencyRows();
+                    showToast(`${fromCode} movido!`);
+                }
+            }
+
+            activeDragState = null;
+            isDraggingRow = false;
+            setTimeout(() => { suppressNextRowClick = false; }, 140);
+        }
+
+        window.addEventListener('mousemove', handleGlobalDragMove);
+        window.addEventListener('mouseup', handleGlobalDragEnd);
+        window.addEventListener('touchmove', handleGlobalDragMove, { passive: false });
+window.addEventListener('touchend', handleGlobalDragEnd);
+window.addEventListener('touchcancel', handleGlobalDragEnd);
+
+// ==========================================
+// PULL-TO-REFRESH (PUXAR PARA BAIXO PARA ATUALIZAR)
+// ==========================================
+function initPullToRefresh() {
+    const container = document.getElementById('currency-list-container');
+    const indicator = document.getElementById('pull-refresh-indicator');
+    const icon = document.getElementById('pull-refresh-icon');
+    const label = document.getElementById('pull-refresh-label');
+    if (!container || !indicator) return;
+
+    let pullStartY = null;
+    let currentPull = 0;
+    let isRefreshing = false;
+    let didPullGesture = false;
+    const TRIGGER_THRESHOLD = 62;
+
+    const resetIndicator = () => {
+        indicator.style.height = '0px';
+        indicator.style.opacity = '0';
+        if (icon) {
+            icon.classList.remove('animate-spin');
+            icon.style.transform = 'rotate(0deg)';
+        }
+        pullStartY = null;
+        currentPull = 0;
+        if (didPullGesture) {
+            suppressNextRowClick = true;
+            setTimeout(() => { suppressNextRowClick = false; }, 180);
+            didPullGesture = false;
+        }
+    };
+
+    container.addEventListener('touchstart', (e) => {
+        if (isDraggingRow || activeDragState || isRefreshing) return;
+        if (container.scrollTop <= 0 && e.touches.length === 1) {
+            pullStartY = e.touches[0].clientY;
+            didPullGesture = false;
+        } else {
+            pullStartY = null;
+        }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (pullStartY === null || isDraggingRow || activeDragState || isRefreshing) return;
+        if (container.scrollTop > 0) {
+            resetIndicator();
+            return;
+        }
+
+        const deltaY = e.touches[0].clientY - pullStartY;
+        if (deltaY > 10) {
+            if (e.cancelable) e.preventDefault();
+            didPullGesture = true;
+            suppressNextRowClick = true;
+            currentPull = Math.min(84, deltaY * 0.55);
+            indicator.style.height = `${currentPull}px`;
+            indicator.style.opacity = Math.min(1, currentPull / 45).toString();
+
+            if (icon) {
+                icon.style.transform = `rotate(${Math.round(currentPull * 4)}deg)`;
+            }
+            if (label) {
+                label.textContent = currentPull >= TRIGGER_THRESHOLD
+                    ? 'Solte para atualizar agora'
+                    : 'Puxe para atualizar cotações';
+            }
+        }
+    }, { passive: false });
+
+    const finishPull = async () => {
+        if (pullStartY === null) return;
+        const shouldRefresh = currentPull >= TRIGGER_THRESHOLD && !isRefreshing;
+        pullStartY = null;
+
+        if (shouldRefresh) {
+            isRefreshing = true;
+            suppressNextRowClick = true;
+            indicator.style.height = '44px';
+            indicator.style.opacity = '1';
+            if (icon) icon.classList.add('animate-spin');
+            if (label) label.textContent = 'Atualizando cotações ao vivo...';
+
+            if (navigator.vibrate) navigator.vibrate(20);
+            await fetchLiveRates(true);
+
+            setTimeout(() => {
+                isRefreshing = false;
+                resetIndicator();
+            }, 350);
+        } else {
+            resetIndicator();
+        }
+    };
+
+    container.addEventListener('touchend', finishPull);
+    container.addEventListener('touchcancel', finishPull);
+}
+
+function selectActiveCurrency(code) {
+    if (suppressNextRowClick || isDraggingRow) return;
+    if (appState.activeCode === code) {
+        appState.resetOnNextDigit = true;
+        renderCurrencyRows();
+        return;
+    }
+
+    const activeValue = getActiveNumericValue();
+    const activeUsdRate = getEffectiveUsdRate(appState.activeCode);
+    const valueInUsd = activeUsdRate > 0 ? (activeValue / activeUsdRate) : 0;
+    const newUsdRate = getEffectiveUsdRate(code);
+    const convertedVal = valueInUsd * newUsdRate;
+
+    appState.activeCode = code;
+    appState.inputString = formatNumberToInput(convertedVal);
+    appState.pendingOperator = null;
+    appState.previousValue = null;
+    appState.resetOnNextDigit = true;
+    saveToStorage();
+    renderCurrencyRows();
+}
+
+function swapTopTwoCurrencies() {
+    if (appState.selectedCodes.length < 2) return;
+    const [first, second] = appState.selectedCodes;
+    appState.selectedCodes[0] = second;
+    appState.selectedCodes[1] = first;
+    const nextActive = appState.activeCode === first ? second : first;
+    saveToStorage();
+    selectActiveCurrency(nextActive);
+}
+
+// ==========================================
+// TECLADO & CALCULADORA
+// ==========================================
+        // TECLADO & CALCULADORA
+        // ==========================================
+        function pressDigit(digit) {
+            if (appState.resetOnNextDigit) {
+                appState.inputString = digit;
+                appState.resetOnNextDigit = false;
+            } else if (appState.inputString === '0') {
+                appState.inputString = digit;
+            } else if (appState.inputString.replace(',', '').length < 14) {
+                appState.inputString += digit;
+            }
+            renderCurrencyRows();
+        }
+
+        function pressDecimal() {
+            if (appState.resetOnNextDigit) {
+                appState.inputString = '0,';
+                appState.resetOnNextDigit = false;
+            } else if (!appState.inputString.includes(',')) {
+                appState.inputString += ',';
+            }
+            renderCurrencyRows();
+        }
+
+        function pressBackspace() {
+            if (appState.resetOnNextDigit) {
+                appState.inputString = '0';
+                appState.resetOnNextDigit = false;
+            } else if (appState.inputString.length <= 1) {
+                appState.inputString = '0';
+            } else {
+                appState.inputString = appState.inputString.slice(0, -1);
+            }
+            renderCurrencyRows();
+        }
+
+        function pressClear() {
+            appState.inputString = '0';
+            appState.pendingOperator = null;
+            appState.previousValue = null;
+            appState.resetOnNextDigit = false;
+            renderCurrencyRows();
+        }
+
+        function pressOperator(op) {
+            const currentVal = getActiveNumericValue();
+            if (appState.pendingOperator && appState.previousValue !== null && !appState.resetOnNextDigit) {
+                const evaluated = computeOperation(appState.previousValue, currentVal, appState.pendingOperator);
+                appState.previousValue = evaluated;
+                appState.inputString = formatNumberToInput(evaluated);
+            } else {
+                appState.previousValue = currentVal;
+            }
+            appState.pendingOperator = op;
+            appState.resetOnNextDigit = true;
+            renderCurrencyRows();
+        }
+
+        function pressEquals() {
+            if (!appState.pendingOperator || appState.previousValue === null) {
+                appState.resetOnNextDigit = true;
+                renderCurrencyRows();
+                return;
+            }
+            const currentVal = getActiveNumericValue();
+            const result = computeOperation(appState.previousValue, currentVal, appState.pendingOperator);
+            appState.inputString = formatNumberToInput(result);
+            appState.pendingOperator = null;
+            appState.previousValue = null;
+            appState.resetOnNextDigit = true;
+            renderCurrencyRows();
+        }
+
+        function computeOperation(a, b, op) {
+            switch (op) {
+                case '+': return a + b;
+                case '-': return a - b;
+                case '*': return a * b;
+                case '/': return b !== 0 ? a / b : 0;
+                default: return b;
+            }
+        }
+
+        function formatNumberToInput(num) {
+            if (!isFinite(num)) return '0';
+            const rounded = Math.round(num * 1000000) / 1000000;
+            return rounded.toString().replace('.', ',');
+        }
+
+        function formatRawInputString(raw) {
+            const parts = raw.split(',');
+            const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return parts.length > 1 ? `${intPart},${parts[1]}` : intPart;
+        }
+
+        function formatDisplayNumber(num, maxDecimals = 2) {
+            if (!isFinite(num) || num === 0) return '0,00';
+            const decimals = Math.abs(num) < 0.01 ? Math.max(maxDecimals, 6) : maxDecimals;
+            return num.toLocaleString('pt-BR', {
+                minimumFractionDigits: Math.min(2, decimals),
+                maximumFractionDigits: decimals
+            });
+        }
+
+        function initPhysicalKeyboard() {
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                if (e.key >= '0' && e.key <= '9') pressDigit(e.key);
+                else if (e.key === ',' || e.key === '.') pressDecimal();
+                else if (e.key === 'Backspace') pressBackspace();
+                else if (e.key === 'Escape' || e.key.toLowerCase() === 'c') pressClear();
+                else if (e.key === '+' || e.key === '-' || e.key === '*' || e.key === '/') pressOperator(e.key);
+                else if (e.key === 'Enter' || e.key === '=') {
+                    e.preventDefault();
+                    pressEquals();
+                }
+            });
+        }
+
+        // ==========================================
+        // CONTROLE DE TECLADO RETRÁTIL & TEMA
+        // ==========================================
+        function toggleKeypad() {
+            appState.keypadExpanded = !appState.keypadExpanded;
+            const drawer = document.getElementById('keypad-drawer');
+            const chevron = document.getElementById('keypad-chevron');
+
+            if (appState.keypadExpanded) {
+                drawer.style.maxHeight = '340px';
+                drawer.style.opacity = '1';
+                chevron.style.transform = 'rotate(0deg)';
+            } else {
+                drawer.style.maxHeight = '0px';
+                drawer.style.opacity = '0';
+                chevron.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.classList.toggle('dark');
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+                safeCreateIcons();
+            }
+        }
+
+        function focusConverterTab() {
+            closeAddCurrencyModal();
+            closeChartModal();
+            closeCustomRateModal();
+            closeInstallHelpModal();
+        }
+
+        // ==========================================
+        // MODAIS: GERENCIAR MOEDAS, GRÁFICO & MINHA TAXA
+        // ==========================================
+        function openAddCurrencyModal() {
+            document.getElementById('add-currency-modal').classList.remove('hidden');
+            renderModalCurrencyList();
+            safeCreateIcons();
+        }
+
+        function closeAddCurrencyModal() {
+            document.getElementById('add-currency-modal').classList.add('hidden');
+        }
+
+        function renderModalCurrencyList() {
+            const query = (document.getElementById('currency-search-input')?.value || '').trim().toLowerCase();
+            const listEl = document.getElementById('modal-currency-list');
+            const filtered = ALL_CURRENCIES.filter(c =>
+                c.code.toLowerCase().includes(query) || c.name.toLowerCase().includes(query)
+            );
+
+            listEl.innerHTML = filtered.map(c => {
+                const isSelected = appState.selectedCodes.includes(c.code);
+                return `
+                    <button onclick="toggleCurrencyInList('${c.code}')" class="w-full px-3.5 py-3 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-[#262626] rounded-xl transition text-left">
+                        <div class="flex items-center gap-3">
+                            ${getCurrencyBadgeHtml(c, true)}
+                            <div>
+                                <div class="font-bold text-sm text-slate-900 dark:text-white">${c.code}</div>
+                                <div class="text-xs text-slate-500">${c.name}</div>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold px-3 py-1 rounded-lg ${isSelected ? 'bg-[#4f86c6]/20 text-[#4f86c6]' : 'bg-slate-200 dark:bg-[#2a2a2a] text-slate-400'}">
+                            ${isSelected ? 'Ativa ✓' : '+ Adicionar'}
+                        </span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function toggleCurrencyInList(code) {
+            const idx = appState.selectedCodes.indexOf(code);
+            if (idx !== -1) {
+                if (appState.selectedCodes.length <= 2) {
+                    showToast('Mantenha pelo menos 2 moedas na lista.');
+                    return;
+                }
+                appState.selectedCodes.splice(idx, 1);
+                if (appState.activeCode === code) {
+                    appState.activeCode = appState.selectedCodes[0];
+                }
+            } else {
+                appState.selectedCodes.push(code);
+            }
+            saveToStorage();
+            renderModalCurrencyList();
+            renderCurrencyRows();
+        }
+
+        let chartPairFrom = 'USD';
+        let chartPairTo = 'BRL';
+
+        function openChartModal() {
+            const secondCode = appState.selectedCodes.find(c => c !== appState.activeCode) || 'BRL';
+            openChartForPair(appState.activeCode, secondCode);
+        }
+
+        function openChartForPair(fromCode, toCode) {
+            chartPairFrom = fromCode;
+            chartPairTo = toCode === fromCode ? (appState.selectedCodes.find(c => c !== fromCode) || 'BRL') : toCode;
+            document.getElementById('chart-modal-title').textContent = `Histórico ${chartPairFrom} → ${chartPairTo}`;
+            document.getElementById('chart-modal').classList.remove('hidden');
+            const firstBtn = document.querySelector('.chart-range-btn');
+            updateHistoryChart(7, firstBtn);
+            safeCreateIcons();
+        }
+
+        function closeChartModal() {
+            document.getElementById('chart-modal').classList.add('hidden');
+        }
+
+        function updateHistoryChart(days, btnEl) {
+            document.querySelectorAll('.chart-range-btn').forEach(b => {
+                b.className = 'chart-range-btn py-1.5 rounded-lg text-slate-500';
+            });
+            if (btnEl) {
+                btnEl.className = 'chart-range-btn py-1.5 rounded-lg bg-white dark:bg-[#2a2a2a] text-[#4f86c6] shadow-xs';
+            }
+
+            const fromRate = getEffectiveUsdRate(chartPairFrom);
+            const toRate = getEffectiveUsdRate(chartPairTo);
+            const currentRate = fromRate > 0 ? (toRate / fromRate) : 1;
+
+            const labels = [];
+            const dataPoints = [];
+            const pointsCount = Math.min(days, 24);
+            let simulated = currentRate * 0.97;
+
+            for (let i = pointsCount; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - Math.round((i * days) / pointsCount));
+                labels.push(d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+                if (i === 0) {
+                    dataPoints.push(currentRate);
+                } else {
+                    const drift = (currentRate - simulated) * 0.18;
+                    const wave = Math.sin(i * 1.3) * (currentRate * 0.012);
+                    simulated = simulated + drift + wave;
+                    dataPoints.push(Number(simulated.toFixed(6)));
+                }
+            }
+
+            const canvas = document.getElementById('rate-history-canvas');
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (appState.chartInstance) {
+                appState.chartInstance.destroy();
+            }
+
+            appState.chartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `${chartPairFrom}/${chartPairTo}`,
+                        data: dataPoints,
+                        borderColor: '#4f86c6',
+                        backgroundColor: 'rgba(79, 134, 198, 0.15)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 6, font: { size: 11 } } },
+                        y: { ticks: { font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        function openCustomRateModal() {
+            const targetCode = appState.selectedCodes.find(c => c !== appState.activeCode) || 'BRL';
+            const currentUnitRate = getEffectiveUsdRate(targetCode) / getEffectiveUsdRate(appState.activeCode);
+            document.getElementById('custom-rate-label').textContent = `1 ${appState.activeCode} vale quanto em ${targetCode}?`;
+            document.getElementById('custom-rate-input').value = Number(currentUnitRate.toFixed(6));
+            document.getElementById('custom-rate-modal').dataset.targetCode = targetCode;
+            document.getElementById('custom-rate-modal').classList.remove('hidden');
+            safeCreateIcons();
+        }
+
+        function closeCustomRateModal() {
+            document.getElementById('custom-rate-modal').classList.add('hidden');
+        }
+
+        function saveCustomRate() {
+            const modal = document.getElementById('custom-rate-modal');
+            const targetCode = modal.dataset.targetCode || 'BRL';
+            const val = parseFloat(document.getElementById('custom-rate-input').value);
+            if (!val || val <= 0) {
+                showToast('Informe um valor válido maior que zero.');
+                return;
+            }
+            const activeUsd = getEffectiveUsdRate(appState.activeCode);
+            appState.customRatesUsd[targetCode] = activeUsd * val;
+            saveToStorage();
+            renderCurrencyRows();
+            closeCustomRateModal();
+            showToast(`Taxa manual aplicada para ${targetCode}!`);
+        }
+
+        function resetCustomRate() {
+            appState.customRatesUsd = {};
+            saveToStorage();
+            renderCurrencyRows();
+            closeCustomRateModal();
+            showToast('Taxas oficiais restauradas!');
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const el = document.createElement('div');
+            el.className = 'bg-[#252525] text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-[#383838] text-center transition-opacity duration-300';
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 2500);
+        }
+    </script>
+</body>
+</html>

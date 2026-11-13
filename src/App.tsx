@@ -34,11 +34,12 @@ import {
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { usePWAInstall } from './hooks/usePWAInstall';
 
-const STORAGE_KEY = 'conversor_plus_state_v5';
+const STORAGE_KEY = 'conversor_plus_state_v6';
 
 interface PersistedState {
   selectedCodes?: string[];
   activeCode?: string;
+  inputString?: string;
   baseRatesUsd?: Record<string, number>;
   customRatesUsd?: Record<string, number>;
   theme?: 'light' | 'dark';
@@ -91,10 +92,14 @@ export default function App() {
   });
 
   // Calculator state
-  const [inputString, setInputString] = useState<string>('548');
+  const [inputString, setInputString] = useState<string>(() =>
+    typeof initialSaved.inputString === 'string' && initialSaved.inputString.length > 0
+      ? initialSaved.inputString
+      : '1'
+  );
   const [pendingOperator, setPendingOperator] = useState<CalcOperator | null>(null);
   const [previousValue, setPreviousValue] = useState<number | null>(null);
-  const [resetOnNextDigit, setResetOnNextDigit] = useState<boolean>(false);
+  const [resetOnNextDigit, setResetOnNextDigit] = useState<boolean>(true);
   const [keypadExpanded, setKeypadExpanded] = useState<boolean>(true);
 
   // Sync & UI state
@@ -118,6 +123,8 @@ export default function App() {
   const [isPullRefreshing, setIsPullRefreshing] = useState<boolean>(false);
   const pullStartYRef = useRef<number | null>(null);
   const pullDistanceRef = useRef<number>(0);
+  const didPullGestureRef = useRef<boolean>(false);
+  const isFetchingRatesRef = useRef<boolean>(false);
   const PULL_TRIGGER_THRESHOLD = 62;
 
   // Drag-reorder state
@@ -151,6 +158,7 @@ export default function App() {
         JSON.stringify({
           selectedCodes,
           activeCode,
+          inputString,
           baseRatesUsd,
           customRatesUsd,
           theme,
@@ -159,7 +167,7 @@ export default function App() {
     } catch {
       // Ignore storage quota errors
     }
-  }, [selectedCodes, activeCode, baseRatesUsd, customRatesUsd, theme]);
+  }, [selectedCodes, activeCode, inputString, baseRatesUsd, customRatesUsd, theme]);
 
   useEffect(() => {
     if (chartTargetCode === activeCode || !selectedCodes.includes(chartTargetCode)) {
@@ -193,12 +201,15 @@ export default function App() {
 
   const fetchLiveRates = useCallback(
     async (manual = false) => {
+      if (isFetchingRatesRef.current) return;
+      isFetchingRatesRef.current = true;
       if (manual) setIsRefreshing(true);
       const nextRates: Record<string, number> = {};
       let updatedAny = false;
 
-      // 1. Fiat: Open ER-API + AwesomeAPI (USD-BRL live bid)
-      const fiatPromise = (async () => {
+      try {
+        // 1. Fiat: Open ER-API + AwesomeAPI (USD-BRL live bid)
+        const fiatPromise = (async () => {
         try {
           const res = await fetch(`https://open.er-api.com/v6/latest/USD?t=${Date.now()}`, {
             cache: 'no-store',
@@ -296,25 +307,28 @@ export default function App() {
         }
       })();
 
-      await Promise.all([fiatPromise, cryptoPromise]);
+        await Promise.all([fiatPromise, cryptoPromise]);
 
-      if (updatedAny && Object.keys(nextRates).length > 0) {
-        setBaseRatesUsd((prev) => ({ ...prev, ...nextRates }));
-        const nowStr = new Date().toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
-        setLastUpdatedTime(nowStr);
-        setRateFetchFailed(false);
-        if (manual) showToast('Cotações online atualizadas!');
-      } else {
-        setRateFetchFailed(true);
-        if (manual) showToast('Tentando reconectar às cotações online...');
-      }
+        if (updatedAny && Object.keys(nextRates).length > 0) {
+          setBaseRatesUsd((prev) => ({ ...prev, ...nextRates }));
+          const nowStr = new Date().toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+          setLastUpdatedTime(nowStr);
+          setRateFetchFailed(false);
+          if (manual) showToast('Cotações online atualizadas!');
+        } else {
+          setRateFetchFailed(true);
+          if (manual) showToast('Tentando reconectar às cotações online...');
+        }
 
-      if (manual) {
-        setTimeout(() => setIsRefreshing(false), 300);
+        if (manual) {
+          setTimeout(() => setIsRefreshing(false), 300);
+        }
+      } finally {
+        isFetchingRatesRef.current = false;
       }
     },
     [showToast]
@@ -592,6 +606,7 @@ export default function App() {
     const container = listContainerRef.current;
     if (container && container.scrollTop <= 0 && e.touches.length === 1) {
       pullStartYRef.current = e.touches[0].clientY;
+      didPullGestureRef.current = false;
     } else {
       pullStartYRef.current = null;
     }
@@ -604,10 +619,19 @@ export default function App() {
       pullStartYRef.current = null;
       pullDistanceRef.current = 0;
       setPullDistance(0);
+      if (didPullGestureRef.current) {
+        suppressRowClickRef.current = true;
+        setTimeout(() => {
+          suppressRowClickRef.current = false;
+        }, 180);
+        didPullGestureRef.current = false;
+      }
       return;
     }
     const deltaY = e.touches[0].clientY - pullStartYRef.current;
-    if (deltaY > 6) {
+    if (deltaY > 10) {
+      didPullGestureRef.current = true;
+      suppressRowClickRef.current = true;
       const clamped = Math.min(84, deltaY * 0.55);
       pullDistanceRef.current = clamped;
       setPullDistance(clamped);
@@ -621,6 +645,7 @@ export default function App() {
 
     if (pulled >= PULL_TRIGGER_THRESHOLD && !isPullRefreshing) {
       setIsPullRefreshing(true);
+      suppressRowClickRef.current = true;
       setPullDistance(44);
       if (navigator.vibrate) navigator.vibrate(20);
       await fetchLiveRates(true);
@@ -628,10 +653,21 @@ export default function App() {
         setIsPullRefreshing(false);
         pullDistanceRef.current = 0;
         setPullDistance(0);
+        setTimeout(() => {
+          suppressRowClickRef.current = false;
+        }, 180);
+        didPullGestureRef.current = false;
       }, 350);
     } else {
       pullDistanceRef.current = 0;
       setPullDistance(0);
+      if (didPullGestureRef.current) {
+        suppressRowClickRef.current = true;
+        setTimeout(() => {
+          suppressRowClickRef.current = false;
+        }, 180);
+        didPullGestureRef.current = false;
+      }
     }
   };
 
