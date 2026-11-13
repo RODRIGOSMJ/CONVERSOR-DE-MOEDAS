@@ -845,7 +845,7 @@ export default function App() {
             onTouchMove={handleListTouchMove}
             onTouchEnd={handleListTouchEnd}
             onTouchCancel={handleListTouchEnd}
-            className="flex-1 overflow-y-auto currency-scroll divide-y divide-slate-200 dark:divide-[#232323]"
+            className="flex-1 overflow-y-auto overscroll-y-contain currency-scroll divide-y divide-slate-200 dark:divide-[#232323]"
           >
             {selectedCodes.map((code) => {
               const info = CURRENCY_MAP[code] || {
